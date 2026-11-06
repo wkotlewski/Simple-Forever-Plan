@@ -20,8 +20,9 @@
   --tone-violet: #6b4c9a; --tone-slate: #4c5a63; --tone-rose: #a34668;
   color-scheme: light;
 }
+/* Dark palette: follows the device setting unless a page explicitly asks for light, and also applies when dark is chosen. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #151b18; --paper: #1e2622; --ink: #ede6d8; --ink-soft: #a9b3ab; --line: #34403a;
     --brand: #9cc3ad; --brand-ink: #13201a; --accent: #e59672; --accent-soft: #3a2a22; --sage-soft: #26332c;
     --danger: #f08a7e; --ok: #8fd1a8; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
@@ -29,6 +30,14 @@
     --tone-violet: #c3a8ec; --tone-slate: #b0bcc4; --tone-rose: #ec9ab8;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #151b18; --paper: #1e2622; --ink: #ede6d8; --ink-soft: #a9b3ab; --line: #34403a;
+  --brand: #9cc3ad; --brand-ink: #13201a; --accent: #e59672; --accent-soft: #3a2a22; --sage-soft: #26332c;
+  --danger: #f08a7e; --ok: #8fd1a8; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  --tone-red: #f08a7e; --tone-blue: #8db9e2; --tone-amber: #e6b766; --tone-green: #8fd1a8;
+  --tone-violet: #c3a8ec; --tone-slate: #b0bcc4; --tone-rose: #ec9ab8;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }

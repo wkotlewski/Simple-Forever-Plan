@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { useData } from '../lib/data'
+import type { Access } from '../lib/auth'
+import StorageSheet from '../components/StorageSheet'
 import { CHAPTERS } from '../lib/questions'
 import { Icon } from '../components/ui'
 import type { Tab } from '../App'
@@ -7,8 +10,9 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 const TOTAL = CHAPTERS.reduce((n, c) => n + c.questions.length, 0)
 
-export default function Home({ go, onSignOut }: { go: (t: Tab) => void; onSignOut: () => void }) {
+export default function Home({ go, onSignOut, onSwitch }: { go: (t: Tab) => void; onSignOut: () => void; onSwitch: (a: Access) => void }) {
   const { data, session, isOwner, settings, store } = useData()
+  const [storage, setStorage] = useState(false)
   const answered = data.answers.filter((a) => !a.skipped && (a.text || a.mediaIds.length)).length
   const touched = data.answers.length
   const pct = Math.round((touched / TOTAL) * 100)
@@ -71,10 +75,20 @@ export default function Home({ go, onSignOut }: { go: (t: Tab) => void; onSignOu
         </section>
       )}
 
+      <button className="card save-card" onClick={() => setStorage(true)}>
+        <Icon name="upload" />
+        <span>
+          <strong>{store.mode === 'drive' ? 'Saved in your Google Drive' : store.mode === 'cloud' ? 'Saved securely in the cloud' : 'Saved on this phone'}</strong>
+          <small className="muted">Save a copy to Files, iCloud, Google Drive, Dropbox or a spreadsheet</small>
+        </span>
+      </button>
+
       <footer className="home-foot">
-        <span>{store.mode === 'local' ? 'Saved on this device' : 'Saved securely in the cloud'}</span>
+        <span />
         <button className="link-btn" onClick={onSignOut}>Sign out</button>
       </footer>
+
+      {storage && <StorageSheet onClose={() => setStorage(false)} onSwitch={onSwitch} onDisconnect={onSignOut} />}
     </div>
   )
 }

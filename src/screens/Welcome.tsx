@@ -3,9 +3,12 @@ import {
   enterLocalFamilyCode, isEmail, resolveCloudAccess, sendCode, startLocalOwner, verifyCode, type Access,
 } from '../lib/auth'
 import { cloudEnabled } from '../lib/supabase'
+import { driveConfigured } from '../lib/google'
+import { connectAndOpenDrive } from '../lib/openDrive'
 import { Icon } from '../components/ui'
+import DriveConsent from '../components/DriveConsent'
 
-type Path = null | 'owner' | 'family'
+type Path = null | 'owner' | 'family' | 'drive'
 
 export default function Welcome({ onAccess }: { onAccess: (a: Access) => void }) {
   const [path, setPath] = useState<Path>(null)
@@ -28,21 +31,63 @@ export default function Welcome({ onAccess }: { onAccess: (a: Access) => void })
             <Icon name="lock" size={28} />
             <span><strong>I'm family — I have a code</strong><small>Open the stories and notes someone shared with you.</small></span>
           </button>
+          {driveConfigured && !cloudEnabled && (
+            <button className="link-btn center" onClick={() => setPath('drive')}>Already saved your plan to Google Drive? Open it here</button>
+          )}
         </div>
       )}
 
       {path && (
         <div className="card welcome-form">
           <button className="link-btn" onClick={() => setPath(null)}><Icon name="back" size={18} /> Back</button>
-          {cloudEnabled ? <CloudSignIn path={path} onAccess={onAccess} /> : <LocalSignIn path={path} onAccess={onAccess} />}
+          {path === 'drive' ? <DriveStep onAccess={onAccess} />
+            : cloudEnabled ? <CloudSignIn path={path} onAccess={onAccess} /> : <LocalSignIn path={path} onAccess={onAccess} />}
         </div>
       )}
 
       <p className="welcome-foot">
         {cloudEnabled
           ? 'Your plan is private. Only family you invite can open it, and only after entering a code sent to them.'
-          : 'This-device mode: everything is saved privately in this browser. Connect a backend to share with family on their own phones.'}
+          : driveConfigured
+            ? 'Nothing is saved to Google Drive unless you agree to it. Otherwise everything stays privately on this device.'
+            : 'Everything is saved privately on this device.'}
       </p>
+    </div>
+  )
+}
+
+/** Asks for agreement, then connects Google Drive. `name` is set for someone just starting. */
+function DriveStep({ name, onAccess, onSkip }: { name?: string; onAccess: (a: Access) => void; onSkip?: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [progress, setProgress] = useState('')
+  return (
+    <DriveConsent busy={busy} error={error} progress={progress} onCancel={onSkip} cancelLabel="Go back"
+      onConnect={async () => {
+        setBusy(true); setError('')
+        try { onAccess(await connectAndOpenDrive(name, setProgress)) } catch (e: any) { setError(e?.message ?? 'Could not connect Google Drive.'); setProgress('') }
+        setBusy(false)
+      }} />
+  )
+}
+
+/** Where should the plan be saved? The phone is the default; Google Drive only after agreeing. */
+function StorageChoice({ name, onAccess }: { name: string; onAccess: (a: Access) => void }) {
+  const [drive, setDrive] = useState(false)
+  if (drive) return <DriveStep name={name} onAccess={onAccess} onSkip={() => setDrive(false)} />
+  return (
+    <div className="stack">
+      <h2>Where should your plan be saved?</h2>
+      <button className="choice" onClick={() => onAccess(startLocalOwner(name))}>
+        <Icon name="home" size={28} />
+        <span><strong>On this phone</strong><small>Private to this phone. Nothing is sent anywhere. You can save a copy to Files, iCloud, Google Drive, Dropbox or a spreadsheet whenever you like.</small></span>
+      </button>
+      {driveConfigured && (
+        <button className="choice" onClick={() => setDrive(true)}>
+          <Icon name="lock" size={28} />
+          <span><strong>In my Google Drive</strong><small>Backed up automatically and opens on any device. You’ll be asked to agree first.</small></span>
+        </button>
+      )}
     </div>
   )
 }
@@ -50,10 +95,14 @@ export default function Welcome({ onAccess }: { onAccess: (a: Access) => void })
 function LocalSignIn({ path, onAccess }: { path: Exclude<Path, null>; onAccess: (a: Access) => void }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState('')
+  const [named, setNamed] = useState(false)
 
+  if (path === 'owner' && named) {
+    return <StorageChoice name={value.trim()} onAccess={onAccess} />
+  }
   if (path === 'owner') {
     return (
-      <form onSubmit={(e) => { e.preventDefault(); if (value.trim()) onAccess(startLocalOwner(value.trim())) }}>
+      <form onSubmit={(e) => { e.preventDefault(); if (value.trim()) setNamed(true) }}>
         <label className="field"><span>What should we call you?</span>
           <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder="Your name" autoComplete="name" />
         </label>
@@ -77,7 +126,7 @@ function LocalSignIn({ path, onAccess }: { path: Exclude<Path, null>; onAccess: 
   )
 }
 
-function CloudSignIn({ path, onAccess }: { path: Exclude<Path, null>; onAccess: (a: Access) => void }) {
+function CloudSignIn({ path, onAccess }: { path: 'owner' | 'family'; onAccess: (a: Access) => void }) {
   const [name, setName] = useState('')
   const [contact, setContact] = useState('')
   const [code, setCode] = useState('')

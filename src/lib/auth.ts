@@ -43,9 +43,22 @@ export function restoreLocal(): Access | null {
 }
 
 export function startLocalOwner(name: string): Access {
-  const session: Session = { role: 'owner', name, canViewMedical: true }
+  const session: Session = { role: 'owner', name, canViewMedical: true, storage: 'local' }
   localStorage.setItem(LOCAL_KEY, JSON.stringify(session))
   return { session, store: localStore }
+}
+
+/** Remembers that this device's plan lives in Google Drive (the Drive files themselves hold the data). */
+export function rememberDriveSession(name: string): Session {
+  const session: Session = { role: 'owner', name, canViewMedical: true, storage: 'drive' }
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(session))
+  return session
+}
+
+/** Opens the plan from Google Drive. Call after connectGoogle() succeeds. */
+export async function openDrive(session: Session): Promise<Access> {
+  const { createDriveStore } = await import('./driveStore')
+  return { session, store: await createDriveStore() }
 }
 
 export async function enterLocalFamilyCode(code: string): Promise<Access | null> {

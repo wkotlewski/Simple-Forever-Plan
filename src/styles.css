@@ -130,6 +130,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); outline:
 .welcome-choices { display: flex; flex-direction: column; gap: 12px; }
 .choice { display: flex; gap: 16px; align-items: center; text-align: left; padding: 20px; border-radius: var(--r); border: 1px solid var(--line);
   background: var(--paper); box-shadow: var(--shadow); cursor: pointer; color: var(--brand); }
+.choice > svg, .save-card > svg, .where > svg, .share-card > svg { flex: none; }
 .choice span { display: flex; flex-direction: column; gap: 3px; color: var(--ink); }
 .choice strong { font-size: 20px; }
 .choice small { font-size: 16px; color: var(--ink-soft); }
@@ -155,6 +156,22 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); outline:
 .share-card { display: flex; gap: 14px; align-items: center; cursor: pointer; color: var(--brand); }
 .share-card div { color: var(--ink); }
 .home-foot { display: flex; justify-content: space-between; align-items: center; font-size: 15px; color: var(--ink-soft); }
+
+/* Saving and consent */
+.save-card { display: flex; gap: 14px; align-items: center; text-align: left; width: 100%; cursor: pointer; color: var(--brand); font: inherit; }
+.save-card span { display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
+.save-card small { font-size: 15px; }
+.where { display: flex; gap: 12px; align-items: flex-start; color: var(--brand); }
+.where div { color: var(--ink); display: flex; flex-direction: column; gap: 4px; }
+.consent-head { display: flex; gap: 14px; align-items: center; }
+.drive-badge { flex: none; width: 48px; height: 48px; border-radius: 14px; background: var(--sage-soft); color: var(--brand); display: grid; place-items: center; }
+.consent-list { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 8px; font-size: 16px; }
+.consent-check { align-items: flex-start; padding: 14px; border-radius: 14px; background: var(--sage-soft); }
+.consent-check input { margin-top: 2px; flex: none; }
+.notice { padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 16px; }
+.link-btn.center { align-self: center; font-size: 16px; text-align: center; }
+.reconnect { position: sticky; top: 0; z-index: 15; display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--accent-soft); font-size: 16px; }
 
 /* Story list */
 .segmented { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 16px; }

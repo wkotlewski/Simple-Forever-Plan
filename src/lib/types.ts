@@ -89,6 +89,8 @@ export interface Settings {
   id: 'settings'
   storytellerName: string
   voice: 'first' | 'third'
+  /** When the storyteller agreed to keep their plan in their Google Drive. */
+  driveConsentAt?: string
 }
 
 export interface CollectionMap {
@@ -110,4 +112,6 @@ export interface Session {
   role: Role
   name: string
   canViewMedical: boolean
+  /** Where this device keeps the plan: in the browser, or in the storyteller's Google Drive. */
+  storage?: 'local' | 'drive'
 }

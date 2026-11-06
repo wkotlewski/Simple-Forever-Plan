@@ -1,4 +1,4 @@
-import { createStore, get, set, del } from 'idb-keyval'
+import { createStore, get, set, del, keys as idbKeys } from 'idb-keyval'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CollectionMap, CollectionName, ID } from './types'
 import { getSupabase } from './supabase'
@@ -8,10 +8,12 @@ import { getSupabase } from './supabase'
  * in "this device only" mode (IndexedDB) and in cloud mode (Supabase, shared with family).
  */
 export interface Store {
-  mode: 'local' | 'cloud'
+  mode: 'local' | 'cloud' | 'drive'
   list<K extends CollectionName>(c: K): Promise<CollectionMap[K][]>
   put<K extends CollectionName>(c: K, item: CollectionMap[K]): Promise<void>
   remove(c: CollectionName, id: ID): Promise<void>
+  /** Saves many items in one write where the storage supports it. */
+  putMany?<K extends CollectionName>(c: K, items: CollectionMap[K][]): Promise<void>
   /** `scope: 'medical'` keeps the file visible only to family allowed to see the medical binder. */
   putMedia(blob: Blob, scope?: 'medical'): Promise<ID>
   mediaUrl(id: ID): Promise<string | null>
@@ -64,9 +66,14 @@ export const localStore: Store = {
   },
 }
 
+/** The original saved file behind a this-device media id (used when moving everything to Google Drive). */
+export const getLocalBlob = (id: ID) => get(`media:${id}`, db) as Promise<Blob | undefined>
+
 export async function wipeLocal() {
   const keys: CollectionName[] = ['answers', 'stories', 'people', 'relations', 'medical', 'messages', 'members', 'settings']
   await Promise.all(keys.map((k) => del(k, db)))
+  const media = (await idbKeys(db)).filter((k) => String(k).startsWith('media:'))
+  await Promise.all(media.map((k) => del(k, db)))
 }
 
 // ---------- Cloud mode (Supabase) ----------

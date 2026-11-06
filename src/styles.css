@@ -316,6 +316,29 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .avatar-sm { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; font-size: 18px !important; }
 .circle-mentored { color: var(--tone-green); } .circle-mentor { color: var(--tone-blue); } .circle-friend { color: var(--tone-rose); }
 
+/* Your story so far */
+.summary-card { display: flex; gap: 14px; align-items: center; text-align: left; width: 100%; cursor: pointer; font: inherit; color: var(--accent);
+  background: linear-gradient(140deg, var(--paper), var(--accent-soft)); }
+.summary-card span { display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
+.summary-card strong { font-family: var(--serif); font-size: 20px; }
+.summary-card small { font-size: 15px; color: var(--ink-soft); }
+.summary-card > svg { flex: none; }
+.facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fact { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); }
+.fact.right { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.fact.fixed { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 50%, var(--paper)); }
+.fact > .stack { width: 100%; }
+.fact-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 17px; }
+.fact-text s { color: var(--ink-soft); font-size: 15px; }
+.fact-old { color: var(--ink-soft); font-size: 15px; }
+.fact-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.fact-actions .icon-btn { border: 1.5px solid var(--line); width: 40px; height: 40px; color: var(--ink-soft); }
+.fact-actions .icon-btn.on { background: var(--ok); border-color: var(--ok); color: var(--paper); }
+.history { border-top: 1px solid var(--line); padding-top: 10px; }
+.history summary { cursor: pointer; font-weight: 700; color: var(--brand); min-height: 40px; display: flex; align-items: center; }
+.history-item { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: flex-start; }
+.history-text { font-size: 15px; color: var(--ink-soft); }
+
 /* Keepsakes */
 .occasions { display: flex; flex-direction: column; gap: 8px; }
 .keepsakes { display: flex; flex-direction: column; gap: 12px; }

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useData } from '../lib/data'
 import { CHAPTERS, chapterById } from '../lib/questions'
-import { composeChapter } from '../lib/compose'
+import { composeChapter, correctionsFrom, writerAvailable } from '../lib/compose'
+import { ensureInbox } from '../lib/inbox'
+import Summary from './Summary'
 import { mediaKind } from '../lib/store'
 import type { Answer, ChapterStory } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader } from '../components/ui'
@@ -10,7 +12,7 @@ import Book from './Book'
 import { PasteReply } from '../components/AskSheet'
 import { offerReply } from '../lib/ask'
 
-type View = { kind: 'list' } | { kind: 'interview'; id: string } | { kind: 'chapter'; id: string } | { kind: 'book' }
+type View = { kind: 'list' } | { kind: 'interview'; id: string } | { kind: 'chapter'; id: string } | { kind: 'book' } | { kind: 'summary' }
 
 export default function Story() {
   const [view, setView] = useState<View>({ kind: 'list' })
@@ -20,10 +22,11 @@ export default function Story() {
   if (view.kind === 'interview') return <Interview chapterId={view.id} onDone={() => setView({ kind: 'chapter', id: view.id })} />
   if (view.kind === 'chapter') return <ChapterView id={view.id} onBack={back} onAnswer={() => setView({ kind: 'interview', id: view.id })} />
   if (view.kind === 'book') return <Book onBack={back} />
-  return <ChapterList open={(id, interview) => setView(interview ? { kind: 'interview', id } : { kind: 'chapter', id })} onBook={() => setView({ kind: 'book' })} />
+  if (view.kind === 'summary') return <Summary onBack={back} />
+  return <ChapterList open={(id, interview) => setView(interview ? { kind: 'interview', id } : { kind: 'chapter', id })} onBook={() => setView({ kind: 'book' })} onSummary={() => setView({ kind: 'summary' })} />
 }
 
-function ChapterList({ open, onBook }: { open: (id: string, interview: boolean) => void; onBook: () => void }) {
+function ChapterList({ open, onBook, onSummary }: { open: (id: string, interview: boolean) => void; onBook: () => void; onSummary: () => void }) {
   const { data, isOwner, settings, save } = useData()
   const chapters = isOwner ? CHAPTERS : CHAPTERS.filter((c) => data.stories.some((s) => s.id === c.id && s.approved))
 
@@ -42,6 +45,16 @@ function ChapterList({ open, onBook }: { open: (id: string, interview: boolean) 
             </button>
           ))}
         </div>
+      )}
+
+      {isOwner && data.answers.some((a) => (a.text && !a.skipped) || a.contributions?.length) && (
+        <button className="card summary-card" onClick={onSummary}>
+          <Icon name="sparkle" />
+          <span>
+            <strong>Your story so far</strong>
+            <small>See how your life reads as one story, and check what was understood.</small>
+          </span>
+        </button>
       )}
 
       {!chapters.length && <Empty icon="book" title="No chapters shared yet">When chapters are shared with you, they will appear here.</Empty>}
@@ -103,12 +116,20 @@ function ChapterView({ id, onBack, onAnswer }: { id: string; onBack: () => void;
         ...(a.text && !a.skipped ? [{ question: a.question, text: a.text }] : []),
         ...(a.contributions ?? []).map((c) => ({ question: `${a.question} (as remembered by ${c.from})`, text: c.text })),
       ])
-      const out = await composeChapter({ chapterTitle: chapter.title, storytellerName: name, voice: settings.voice, answers: material })
+      let ready = settings
+      if (writerAvailable && !settings.inboxId) {
+        const next = await ensureInbox(settings)
+        if (next) { await save('settings', next); ready = next }
+      }
+      const corrections = correctionsFrom(data.insights.find((x) => x.id === 'summary'))
+      const out = await composeChapter({ chapterTitle: chapter.title, storytellerName: name, voice: settings.voice, answers: material, corrections }, ready)
       setBody(out.body)
       setEditing(true)
       setNote(out.usedAI
-        ? 'Written from your answers only. Read it through and fix anything that is not quite right.'
-        : 'Arranged in your own words. Connect the story writer to have it smoothed into flowing chapters.')
+        ? 'Written only from what you and your family shared. Read it through and fix anything that isn’t quite right — nothing is saved until you tap Save.'
+        : out.note
+          ? `The story writer couldn’t be reached (${out.note}), so here are your own words in order. Nothing is saved until you tap Save.`
+          : 'Here are your own words in order. Once the story writer is connected, this becomes a smooth, flowing chapter.')
     } catch (e: any) {
       setNote(e?.message ?? 'Could not write this chapter right now.')
     }
@@ -116,7 +137,11 @@ function ChapterView({ id, onBack, onAnswer }: { id: string; onBack: () => void;
   }
 
   async function store(approved: boolean) {
-    const next: ChapterStory = { id, title: chapter.title, body, voice: settings.voice, approved, updatedAt: Date.now() }
+    // Keep earlier versions so a rewrite never loses what was there before.
+    const history = story && story.body && story.body !== body
+      ? [{ body: story.body, savedAt: story.updatedAt }, ...(story.history ?? [])].slice(0, 5)
+      : story?.history
+    const next: ChapterStory = { id, title: chapter.title, body, voice: settings.voice, approved, updatedAt: Date.now(), history }
     await save('stories', next)
     setEditing(false)
   }
@@ -151,6 +176,18 @@ function ChapterView({ id, onBack, onAnswer }: { id: string; onBack: () => void;
                 {isOwner && <button className="btn ghost" onClick={() => save('stories', { ...story!, approved: !story!.approved })}>{story!.approved ? 'Stop sharing' : 'Share with family'}</button>}
               </div>
               {isOwner && !story!.approved && <p className="muted small">Draft — family can’t see this chapter yet.</p>}
+              {isOwner && (story!.history?.length ?? 0) > 0 && (
+                <details className="history">
+                  <summary>Earlier versions ({story!.history!.length})</summary>
+                  {story!.history!.map((h) => (
+                    <div key={h.savedAt} className="history-item">
+                      <p className="label">Saved {new Date(h.savedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+                      <p className="history-text">{h.body.slice(0, 220)}{h.body.length > 220 ? '…' : ''}</p>
+                      <button className="btn ghost small" onClick={() => { setBody(h.body); setEditing(true); setNote('This is an earlier version. Tap Save to bring it back — the current one will be kept as an earlier version too.') }}>Bring this back</button>
+                    </div>
+                  ))}
+                </details>
+              )}
             </>
           )}
         </section>

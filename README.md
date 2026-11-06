@@ -40,6 +40,14 @@ Lets relatives tap **Send** instead of texting their answer back. Plans still st
 2. SQL Editor → New query → paste [`supabase/inbox.sql`](supabase/inbox.sql) → Run.
 3. Put the Project URL and publishable (anon) key in `.env.production` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These are meant to be public; the script only lets relatives drop answers in, and only the storyteller's phone (which holds a private key) can read them.
 
+## Story writer and "Your story so far" (Supabase + Anthropic)
+
+Turns answers into chapters that read like a loving eulogy — clear and smooth, never invented — and writes a life overview with a list of facts to confirm or fix (fixes are followed in every chapter). Rewrites keep earlier versions.
+
+1. After `inbox.sql`, also run [`supabase/writer.sql`](supabase/writer.sql) in the SQL Editor (a daily limit so no one else can use your key).
+2. Edge Functions → Deploy a new function → Via Editor → name `story` → paste [`supabase/functions/story/index.ts`](supabase/functions/story/index.ts) → Deploy. In the function's settings, turn **off** "Verify JWT" (it checks the storyteller's private key itself).
+3. Get an API key at [console.anthropic.com](https://console.anthropic.com) (add a little credit and set a monthly spend limit), then Edge Functions → Secrets → add `ANTHROPIC_API_KEY`.
+
 ## Turn on family sharing across devices (Supabase accounts)
 
 Also set `VITE_ENABLE_ACCOUNTS=true` for this mode.

@@ -3,7 +3,7 @@ import type { Access } from './auth'
 import type { CollectionMap, CollectionName, ID, Settings } from './types'
 
 type Data = { [K in CollectionName]: CollectionMap[K][] }
-const empty: Data = { answers: [], stories: [], people: [], relations: [], medical: [], messages: [], members: [], asks: [], settings: [] }
+const empty: Data = { answers: [], stories: [], people: [], relations: [], medical: [], messages: [], members: [], asks: [], insights: [], settings: [] }
 
 interface Ctx extends Access {
   data: Data
@@ -27,7 +27,7 @@ export function DataProvider({ access, children }: { access: Access; children: R
     let alive = true
     const names = Object.keys(empty) as CollectionName[]
     // Family members only see medical notes if the storyteller allowed it (the server enforces this too).
-    const visible = names.filter((n) => (n === 'members' || n === 'asks' ? session.role === 'owner' : n !== 'medical' || session.canViewMedical))
+    const visible = names.filter((n) => (n === 'members' || n === 'asks' || n === 'insights' ? session.role === 'owner' : n !== 'medical' || session.canViewMedical))
     Promise.all(visible.map(async (n) => [n, await store.list(n)] as const))
       .then((pairs) => alive && setData({ ...empty, ...Object.fromEntries(pairs) }))
       .catch((e) => alive && setLoadError(e?.message ?? 'Could not load your plan.'))

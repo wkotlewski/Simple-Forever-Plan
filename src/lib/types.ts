@@ -44,6 +44,8 @@ export interface ChapterStory {
   voice: 'first' | 'third'
   approved: boolean
   updatedAt: number
+  /** Earlier saved versions (newest first), so rewriting never loses anything. */
+  history?: { body: string; savedAt: number }[]
 }
 
 export interface Person {
@@ -130,6 +132,17 @@ export interface Settings {
   dismissed?: string[]
 }
 
+/** "Your story so far": what the writer understood, checked by the storyteller. */
+export interface LifeSummary {
+  id: 'summary'
+  overview: string
+  facts: { text: string; status: 'unchecked' | 'right' | 'fixed'; correction?: string }[]
+  unclear: { question: string; answer?: string }[]
+  /** How many answers it was written from, to tell when it's out of date. */
+  basedOn: number
+  updatedAt: number
+}
+
 export interface CollectionMap {
   answers: Answer
   stories: ChapterStory
@@ -139,6 +152,7 @@ export interface CollectionMap {
   messages: KeepsakeMessage
   members: Member
   asks: Ask
+  insights: LifeSummary
   settings: Settings
 }
 

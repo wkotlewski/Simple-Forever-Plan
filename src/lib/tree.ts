@@ -1,4 +1,5 @@
-import type { ID, Person, Relation } from './types'
+import type { CollectionMap, ID, Person, Relation } from './types'
+import { uid } from './store'
 
 export interface Placed { person: Person; x: number; y: number; gen: number }
 
@@ -70,4 +71,30 @@ export function layoutTree(people: Person[], rels: Relation[], nodeW = 120, rowH
     row.forEach((p, i) => placed.push({ person: p, gen: g, x: offset + i * nodeW + nodeW / 2, y: gi * rowH + 60 }))
   })
   return { placed, width, height: gens.length * rowH + 20 }
+}
+
+export type Link = 'parent' | 'child' | 'spouse' | 'sibling'
+
+type Save = <K extends 'people' | 'relations'>(c: K, item: CollectionMap[K]) => Promise<void>
+
+/** Connects two people: `personId` is the parent / child / partner / sibling of `otherId`. */
+export async function linkPeople(ctx: { people: Person[]; relations: Relation[]; save: Save }, personId: ID, type: Link, otherId: ID) {
+  const { relations, save } = ctx
+  const name = (id: ID) => ctx.people.find((p) => p.id === id)?.name ?? ''
+  const add = (r: Omit<Relation, 'id'>) => {
+    const dup = relations.some((x) => x.type === r.type && ((x.from === r.from && x.to === r.to) || (r.type === 'spouse' && x.from === r.to && x.to === r.from)))
+    return dup ? Promise.resolve() : save('relations', { id: uid(), ...r })
+  }
+  if (type === 'parent') return add({ type: 'parent', from: personId, to: otherId })
+  if (type === 'child') return add({ type: 'parent', from: otherId, to: personId })
+  if (type === 'spouse') return add({ type: 'spouse', from: personId, to: otherId })
+  // Siblings share parents. If none are known yet, add a placeholder parent that can be renamed later.
+  let ps = parentsOf(otherId, relations)
+  if (!ps.length) {
+    const placeholder: Person = { id: uid(), name: `Parent of ${name(otherId).split(' ')[0]}`, notes: 'Tap to add their real name.', circle: 'family' }
+    await save('people', placeholder)
+    await add({ type: 'parent', from: placeholder.id, to: otherId })
+    ps = [placeholder.id]
+  }
+  for (const p of ps) await add({ type: 'parent', from: p, to: personId })
 }

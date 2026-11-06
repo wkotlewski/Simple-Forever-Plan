@@ -54,6 +54,10 @@ export interface Person {
   photoId?: ID
   notes: string
   isSelf?: boolean
+  /** Family (on the tree) or someone else who mattered: a person they mentored, a mentor, a friend. */
+  circle?: 'family' | 'mentored' | 'mentor' | 'friend'
+  /** In their words, e.g. "Brother", "Apprentice at the shop", "My first boss". */
+  relation?: string
 }
 
 /** parent: `from` is a parent of `to`. spouse: partners, either direction. */
@@ -86,7 +90,7 @@ export interface MedicalItem {
   createdAt: number
 }
 
-export type MessageKind = 'scripture' | 'quote' | 'advice' | 'letter'
+export type MessageKind = 'scripture' | 'song' | 'quote' | 'advice' | 'letter'
 
 export interface KeepsakeMessage {
   id: ID
@@ -94,6 +98,8 @@ export interface KeepsakeMessage {
   text: string
   source?: string
   forWhom?: string
+  /** Why it mattered — often the sentence from the story where it came up. */
+  note?: string
   occasions: string[]
   mediaIds: ID[]
   createdAt: number
@@ -120,6 +126,8 @@ export interface Settings {
   /** This storyteller's private answer mailbox (see supabase/inbox.sql). */
   inboxId?: string
   inboxKey?: string
+  /** Suggestions from stories the storyteller chose not to add. */
+  dismissed?: string[]
 }
 
 export interface CollectionMap {

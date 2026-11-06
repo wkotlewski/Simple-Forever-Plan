@@ -1,24 +1,29 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../lib/data'
 import { uid } from '../lib/store'
-import { childrenOf, layoutTree, parentsOf, siblingsOf, spousesOf } from '../lib/tree'
+import { childrenOf, layoutTree, linkPeople, parentsOf, siblingsOf, spousesOf, type Link } from '../lib/tree'
 import type { ID, Person, Relation } from '../lib/types'
 import { Empty, FileButton, Icon, Media, ScreenHeader, Sheet } from '../components/ui'
+import { SuggestionList, useSuggestions } from '../components/Suggestions'
 
 const NODE_W = 116
+const CIRCLE_NAME = { family: 'Family', mentored: 'Someone I mentored', mentor: 'A mentor to me', friend: 'A friend' } as const
 const R = 30
 
-type Link = 'parent' | 'child' | 'spouse' | 'sibling'
 const LINK_LABEL: Record<Link, string> = { parent: 'Parent of', child: 'Child of', spouse: 'Spouse / partner of', sibling: 'Brother or sister of' }
 
 export default function FamilyTree() {
   const { data, isOwner, session } = useData()
   const [open, setOpen] = useState<ID | 'new' | null>(null)
-  const { placed, width, height } = useMemo(() => layoutTree(data.people, data.relations, NODE_W), [data.people, data.relations])
+  // The tree shows family; mentees, mentors and friends are listed under People Who Mattered.
+  const family = useMemo(() => data.people.filter((p) => !p.circle || p.circle === 'family'), [data.people])
+  const others = data.people.filter((p) => p.circle && p.circle !== 'family')
+  const found = useSuggestions(data.answers, 'people')
+  const { placed, width, height } = useMemo(() => layoutTree(family, data.relations, NODE_W), [family, data.relations])
   const pos = new Map(placed.map((p) => [p.person.id, p]))
 
   // One connector per child: from the middle of their parents (or the one parent) down to them.
-  const childLines = data.people.flatMap((c) => {
+  const childLines = family.flatMap((c) => {
     const ps = parentsOf(c.id, data.relations).map((p) => pos.get(p)).filter(Boolean) as typeof placed
     const me = pos.get(c.id)
     if (!ps.length || !me) return []
@@ -37,7 +42,9 @@ export default function FamilyTree() {
       <ScreenHeader title="Family Tree" sub={isOwner ? 'Add people, photos and notes, then connect who is related to who.' : 'Tap anyone to see their photo and notes.'}
         action={isOwner && data.people.length > 0 ? <button className="icon-btn ring" onClick={() => setOpen('new')} aria-label="Add a person"><Icon name="plus" /></button> : undefined} />
 
-      {!data.people.length ? (
+      {isOwner && <SuggestionList items={found} title="People from your stories" />}
+
+      {!family.length ? (
         <Empty icon="tree" title={isOwner ? 'Start your family tree' : 'No family tree yet'}>
           {isOwner && <button className="btn" onClick={() => setOpen('new')}><Icon name="plus" size={18} /> Add yourself first</button>}
         </Empty>
@@ -53,12 +60,27 @@ export default function FamilyTree() {
         </div>
       )}
 
-      {data.people.length > 0 && (
+      {family.length > 0 && (
         <ul className="people-list">
-          {[...data.people].sort((a, b) => Number(!!b.isSelf) - Number(!!a.isSelf) || a.name.localeCompare(b.name)).map((p) => (
+          {[...family].sort((a, b) => Number(!!b.isSelf) - Number(!!a.isSelf) || a.name.localeCompare(b.name)).map((p) => (
             <li key={p.id}><button onClick={() => setOpen(p.id)}><strong>{p.name}</strong><span>{describe(p, data.people, data.relations, session.name)}</span></button></li>
           ))}
         </ul>
+      )}
+
+      {others.length > 0 && (
+        <section className="stack">
+          <h3 className="section-title">People Who Mattered</h3>
+          <p className="muted small">People you mentored, mentors, and friends who were like family.</p>
+          <div className="mattered">
+            {[...others].sort((a, b) => (a.circle ?? '').localeCompare(b.circle ?? '') || a.name.localeCompare(b.name)).map((p) => (
+              <button key={p.id} className="card mattered-card" onClick={() => setOpen(p.id)}>
+                {p.photoId ? <Media id={p.photoId} className="avatar-sm" /> : <span className="avatar-sm empty-avatar">{p.name[0]}</span>}
+                <span><strong>{p.name}</strong><small className={`circle-${p.circle}`}>{p.relation || CIRCLE_NAME[p.circle!]}</small></span>
+              </button>
+            ))}
+          </div>
+        </section>
       )}
 
       {open && (
@@ -114,29 +136,12 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
   const others = data.people.filter((p) => p.id !== f.id)
   const name = (id: ID) => data.people.find((p) => p.id === id)?.name ?? ''
 
-  async function connect(personId: ID, type: Link, otherId: ID) {
-    const add = (r: Omit<Relation, 'id'>) => {
-      const dup = data.relations.some((x) => x.type === r.type && ((x.from === r.from && x.to === r.to) || (r.type === 'spouse' && x.from === r.to && x.to === r.from)))
-      return dup ? Promise.resolve() : save('relations', { id: uid(), ...r })
-    }
-    if (type === 'parent') return add({ type: 'parent', from: personId, to: otherId })
-    if (type === 'child') return add({ type: 'parent', from: otherId, to: personId })
-    if (type === 'spouse') return add({ type: 'spouse', from: personId, to: otherId })
-    // Siblings share parents. If none are known yet, add a placeholder parent that can be renamed later.
-    let ps = parentsOf(otherId, data.relations)
-    if (!ps.length) {
-      const placeholder: Person = { id: uid(), name: `Parent of ${name(otherId).split(' ')[0]}`, notes: 'Tap to add their real name.' }
-      await save('people', placeholder)
-      await add({ type: 'parent', from: placeholder.id, to: otherId })
-      ps = [placeholder.id]
-    }
-    for (const p of ps) await add({ type: 'parent', from: p, to: personId })
-  }
+  const connect = (personId: ID, type: Link, otherId: ID) => linkPeople({ people: data.people, relations: data.relations, save }, personId, type, otherId)
 
   async function submit() {
     if (!f.name.trim()) return
     await save('people', { ...f, name: f.name.trim() })
-    if (isNew && linkTo && others.length) await connect(f.id, linkType, linkTo)
+    if (isNew && linkTo && others.length && (!f.circle || f.circle === 'family')) await connect(f.id, linkType, linkTo)
     if (isNew) onClose(); else setEditing(false)
   }
 
@@ -166,7 +171,15 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
             <label className="field"><span>Born</span><input value={f.born ?? ''} onChange={(e) => setF({ ...f, born: e.target.value })} placeholder="Year" inputMode="numeric" /></label>
             <label className="field"><span>Passed</span><input value={f.died ?? ''} onChange={(e) => setF({ ...f, died: e.target.value })} placeholder="If applicable" inputMode="numeric" /></label>
           </div>
-          {isNew && others.length > 0 && (
+          <div className="field"><span>Who are they to you?</span>
+            <div className="chips">{(Object.keys(CIRCLE_NAME) as (keyof typeof CIRCLE_NAME)[]).map((c) => (
+              <button type="button" key={c} className={`chip ${(f.circle ?? 'family') === c ? 'on' : ''}`} onClick={() => setF({ ...f, circle: c })}>{CIRCLE_NAME[c]}</button>
+            ))}</div>
+          </div>
+          {f.circle && f.circle !== 'family' && (
+            <label className="field"><span>In your words</span><input id="person-relation" value={f.relation ?? ''} onChange={(e) => setF({ ...f, relation: e.target.value })} placeholder="e.g. Apprentice at the shop" /></label>
+          )}
+          {isNew && others.length > 0 && (!f.circle || f.circle === 'family') && (
             <div className="grid2">
               <label className="field"><span>They are the…</span>
                 <select value={linkType} onChange={(e) => setLinkType(e.target.value as Link)}>
@@ -194,6 +207,7 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
             {f.photoId ? <Media id={f.photoId} className="avatar-lg" /> : <div className="avatar-lg empty-avatar">{f.name[0]}</div>}
             <div>
               <h3>{f.name}</h3>
+              {f.circle && f.circle !== 'family' && <p className={`circle-${f.circle} small`}>{f.relation || CIRCLE_NAME[f.circle]}</p>}
               {(f.born || f.died) && <p className="muted">{[f.born, f.died].filter(Boolean).join(' – ')}</p>}
             </div>
           </div>

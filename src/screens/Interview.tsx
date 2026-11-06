@@ -6,6 +6,7 @@ import { uid } from '../lib/store'
 import type { Answer } from '../lib/types'
 import { FileButton, Icon, Media, ScreenHeader } from '../components/ui'
 import { AskSheet } from '../components/AskSheet'
+import { SuggestionList, useSuggestions } from '../components/Suggestions'
 
 const KEEPSAKE_OCCASION: Record<string, string> = { scripture: 'Hard days', advice: 'Hard days', quote: 'Anytime', letter: 'Anytime' }
 
@@ -50,6 +51,7 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   const [busy, setBusy] = useState(false)
   const [followUp, setFollowUp] = useState<string | null>(null)
   const [asking, setAsking] = useState(false)
+  const found = useSuggestions(existing ? [existing] : [])
   const rec = useRecorder()
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -130,6 +132,7 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
       )}
 
       {!mode && <FamilyAnswers questionId={q.id} />}
+      {!mode && rec.state !== 'recording' && <SuggestionList items={found} title="Found in your answer" />}
 
       {mode === 'video' && rec.state === 'recording' && <video ref={videoRef} className="live-video" autoPlay muted playsInline />}
       {rec.state === 'recording' && (

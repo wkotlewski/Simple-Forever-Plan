@@ -178,7 +178,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); outline:
 .segmented > span { font-weight: 700; margin-right: 4px; }
 .segmented button { border: 1.5px solid var(--line); background: var(--paper); border-radius: 999px; min-height: 40px; padding: 0 14px; cursor: pointer; }
 .segmented button.on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
-.segmented.full { display: grid; grid-template-columns: repeat(4, 1fr); }
+.segmented.full { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); }
 .segmented.full button { padding: 0 4px; font-size: 15px; }
 .chapter-list { display: flex; flex-direction: column; gap: 12px; }
 .chapter-card { padding: 0; overflow: hidden; }
@@ -297,6 +297,25 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .notes { white-space: pre-wrap; }
 .connect { display: flex; flex-direction: column; gap: 10px; }
 
+/* Suggestions found in stories */
+.suggestions { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--r); border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 45%, var(--paper)); }
+.suggestions > .label { display: flex; align-items: center; gap: 6px; color: var(--accent); }
+.suggestion { display: flex; align-items: center; gap: 10px; }
+.suggestion-icon { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--paper); color: var(--brand); }
+.suggestion-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.suggestion-body strong { font-size: 16px; overflow-wrap: anywhere; }
+.suggestion-body small { font-size: 14px; color: var(--ink-soft); }
+.suggestion-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.suggestion-actions .icon-btn { width: 40px; height: 40px; color: var(--ink-soft); }
+
+/* People Who Mattered */
+.mattered { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.mattered-card { display: flex; gap: 10px; align-items: center; text-align: left; padding: 12px; cursor: pointer; font: inherit; color: inherit; }
+.mattered-card span { display: flex; flex-direction: column; min-width: 0; }
+.mattered-card small { font-size: 13px; font-weight: 700; }
+.avatar-sm { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; font-size: 18px !important; }
+.circle-mentored { color: var(--tone-green); } .circle-mentor { color: var(--tone-blue); } .circle-friend { color: var(--tone-rose); }
+
 /* Keepsakes */
 .occasions { display: flex; flex-direction: column; gap: 8px; }
 .keepsakes { display: flex; flex-direction: column; gap: 12px; }
@@ -304,6 +323,8 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .keepsake-text { font-family: var(--serif); font-size: 22px; line-height: 1.5; font-weight: 500; white-space: pre-wrap; }
 .keepsake.kind-scripture .keepsake-text, .keepsake.kind-quote .keepsake-text { font-style: italic; }
 .keepsake-source { color: var(--accent); font-weight: 700; }
+.keepsake-note { color: var(--ink-soft); font-size: 16px; }
+.keepsake.kind-song .keepsake-text { font-style: normal; }
 .chips.small { gap: 6px; }
 
 /* Share */

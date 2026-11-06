@@ -5,9 +5,11 @@ import { canRecord, clock, useRecorder } from '../lib/recorder'
 import { uid } from '../lib/store'
 import type { KeepsakeMessage, MessageKind } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader, Sheet } from '../components/ui'
+import { SuggestionList, useSuggestions } from '../components/Suggestions'
 
 const KINDS: Record<MessageKind, { label: string; source: string }> = {
   scripture: { label: 'Scripture', source: 'Book, chapter and verse (e.g. Psalm 23:4)' },
+  song: { label: 'Song', source: 'Who sings it' },
   quote: { label: 'Quote', source: 'Who said it, or the book it’s from' },
   advice: { label: 'Advice', source: '' },
   letter: { label: 'Letter', source: '' },
@@ -22,12 +24,15 @@ export default function Keepsakes() {
     .sort((a, b) => b.createdAt - a.createdAt)
   const used = OCCASIONS.filter((o) => data.messages.some((m) => m.occasions.includes(o)))
   const who = settings.storytellerName.split(' ')[0]
+  const found = useSuggestions(data.answers, 'keepsakes')
 
   return (
     <div className="screen">
       <ScreenHeader title="Words to Keep"
         sub={isOwner ? 'Scripture, quotes and messages your family can open when life calls for them.' : `Open these when you need ${who ? `${who}'s` : 'their'} words.`}
         action={isOwner ? <button className="icon-btn ring" onClick={() => setEditing('new')} aria-label="Add a message"><Icon name="plus" /></button> : undefined} />
+
+      {isOwner && <SuggestionList items={found} title="Scripture & songs from your stories" />}
 
       {data.messages.length > 0 && (
         <div className="occasions" role="tablist" aria-label="Open when">
@@ -56,6 +61,7 @@ export default function Keepsakes() {
             <span className="label">{KINDS[m.kind].label}{m.forWhom ? ` · for ${m.forWhom}` : ''}</span>
             <p className="keepsake-text">{m.text}</p>
             {m.source && <p className="keepsake-source">— {m.source}</p>}
+            {m.note && <p className="keepsake-note">{m.note}</p>}
             {m.mediaIds.length > 0 && <div className="media-stack" onClick={(e) => e.stopPropagation()}>{m.mediaIds.map((id) => <Media key={id} id={id} />)}</div>}
             <div className="chips small">{m.occasions.map((o) => <span key={o} className="chip quiet">{o}</span>)}</div>
           </article>
@@ -87,11 +93,16 @@ function MessageSheet({ item, onClose }: { item: KeepsakeMessage | null; onClose
             <button type="button" key={k} className={f.kind === k ? 'on' : ''} onClick={() => setF({ ...f, kind: k })}>{KINDS[k].label}</button>
           ))}
         </div>
-        <label className="field"><span>{f.kind === 'scripture' ? 'The verse' : f.kind === 'quote' ? 'The quote' : 'Your message'}</span>
+        <label className="field"><span>{f.kind === 'scripture' ? 'The verse' : f.kind === 'song' ? 'Song title' : f.kind === 'quote' ? 'The quote' : 'Your message'}</span>
           <textarea rows={5} autoFocus value={f.text} onChange={(e) => setF({ ...f, text: e.target.value })} />
         </label>
         {KINDS[f.kind].source && (
           <label className="field"><span>{KINDS[f.kind].source}</span><input value={f.source ?? ''} onChange={(e) => setF({ ...f, source: e.target.value })} /></label>
+        )}
+        {(f.kind === 'song' || f.kind === 'scripture' || f.note) && (
+          <label className="field"><span>Why it matters (optional)</span>
+            <textarea id="keep-note" rows={3} value={f.note ?? ''} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="When it came into your life, what it means to you…" />
+          </label>
         )}
         <label className="field"><span>For someone special? (optional)</span><input value={f.forWhom ?? ''} onChange={(e) => setF({ ...f, forWhom: e.target.value })} placeholder="Everyone" /></label>
         <div className="field"><span>Open when…</span>

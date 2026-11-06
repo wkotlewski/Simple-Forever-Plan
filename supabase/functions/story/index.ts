@@ -14,6 +14,7 @@ Rules — accuracy matters more than polish:
 - Use ONLY facts, names, places, dates and feelings that appear in the answers. Never invent details, dialogue, or emotions.
 - If something is unclear or seems mis-transcribed, keep the person's wording rather than guessing.
 - Keep their voice: their phrases, humor, and way of speaking. Light smoothing is fine; embellishment is not.
+- Some answers are labeled "(as remembered by NAME)": those are memories from a family member. Weave them in and credit them by name (e.g. "Aunt Maria remembers…").
 - Order the material so it reads naturally (usually chronologically).
 - Plain, warm prose. No headings, no bullet points, no title, no preface or closing remarks from you.
 - Separate paragraphs with a blank line.`

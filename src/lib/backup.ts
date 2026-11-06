@@ -4,7 +4,7 @@ import { CHAPTERS } from './questions'
 import type { CollectionMap, CollectionName, ID } from './types'
 
 type Data = { [K in CollectionName]: CollectionMap[K][] }
-const COLLECTIONS: CollectionName[] = ['answers', 'stories', 'people', 'relations', 'medical', 'messages', 'members', 'settings']
+const COLLECTIONS: CollectionName[] = ['answers', 'stories', 'people', 'relations', 'medical', 'messages', 'members', 'asks', 'settings']
 const today = () => new Date().toISOString().slice(0, 10)
 
 const toDataUrl = (b: Blob) => new Promise<string>((res, rej) => {

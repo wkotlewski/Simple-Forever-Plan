@@ -10,6 +10,30 @@ export interface Answer {
   mediaIds: ID[]
   skipped?: boolean
   createdAt: number
+  /** What other family members added when asked about this question. */
+  contributions?: Contribution[]
+}
+
+/** An answer someone else sent back after being asked about one question. */
+export interface Contribution {
+  id: ID
+  from: string
+  text: string
+  mediaIds: ID[]
+  addedAt: number
+}
+
+/** A question sent to a relative by text, waiting for (or holding) their reply. */
+export interface Ask {
+  id: ID
+  chapterId: string
+  questionId: string
+  question: string
+  toName: string
+  toPhone: string
+  note?: string
+  sentAt: number
+  answeredAt?: number
 }
 
 /** The written version of a chapter, built only from that chapter's answers. */
@@ -91,6 +115,8 @@ export interface Settings {
   voice: 'first' | 'third'
   /** When the storyteller agreed to keep their plan in their Google Drive. */
   driveConsentAt?: string
+  /** The storyteller's own mobile number, so relatives can text answers back. */
+  phone?: string
 }
 
 export interface CollectionMap {
@@ -101,6 +127,7 @@ export interface CollectionMap {
   medical: MedicalItem
   messages: KeepsakeMessage
   members: Member
+  asks: Ask
   settings: Settings
 }
 

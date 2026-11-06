@@ -38,10 +38,14 @@ const tidy = (s: string) => {
 }
 
 function arrange(name: string, voice: 'first' | 'third', answers: Pick<Answer, 'question' | 'text'>[]) {
-  if (voice === 'first') return answers.map((a) => tidy(a.text)).join('\n\n')
+  const credited = (a: Pick<Answer, 'question'>) => a.question.match(/\(as remembered by (.+)\)$/)?.[1]
+  if (voice === 'first') {
+    return answers.map((a) => (credited(a) ? `${credited(a)} remembers: “${tidy(a.text)}”` : tidy(a.text))).join('\n\n')
+  }
   const first = name.split(' ')[0] || 'They'
   return answers
     .map((a, i) => {
+      if (credited(a)) return `${credited(a)} remembers: “${tidy(a.text)}”`
       const lead = i === 0 ? `Asked "${a.question.replace(/\?$/, '')}," ${first} said:` : `On "${a.question.replace(/\?$/, '').toLowerCase()}":`
       return `${lead} “${tidy(a.text)}”`
     })

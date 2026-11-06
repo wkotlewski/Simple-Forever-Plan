@@ -1,7 +1,7 @@
 import { getLocalBlob, localStore, wipeLocal, type Store } from './store'
 import type { CollectionName, ID } from './types'
 
-const COLLECTIONS: CollectionName[] = ['answers', 'stories', 'people', 'relations', 'medical', 'messages', 'members', 'settings']
+const COLLECTIONS: CollectionName[] = ['answers', 'stories', 'people', 'relations', 'medical', 'messages', 'members', 'asks', 'settings']
 
 /**
  * Copies everything saved on this device into Google Drive — recordings and photos included —

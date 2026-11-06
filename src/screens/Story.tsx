@@ -3,10 +3,12 @@ import { useData } from '../lib/data'
 import { CHAPTERS, chapterById } from '../lib/questions'
 import { composeChapter } from '../lib/compose'
 import { mediaKind } from '../lib/store'
-import type { ChapterStory } from '../lib/types'
+import type { Answer, ChapterStory } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader } from '../components/ui'
 import Interview from './Interview'
 import Book from './Book'
+import { PasteReply } from '../components/AskSheet'
+import { offerReply } from '../lib/ask'
 
 type View = { kind: 'list' } | { kind: 'interview'; id: string } | { kind: 'chapter'; id: string } | { kind: 'book' }
 
@@ -72,6 +74,8 @@ function ChapterList({ open, onBook }: { open: (id: string, interview: boolean) 
         })}
       </div>
 
+      {isOwner && <PasteReply onReply={offerReply} />}
+
       {(isOwner || chapters.length > 0) && (
         <button className="btn secondary wide" onClick={onBook}><Icon name="print" size={20} /> {isOwner ? 'Make my book' : 'Open the book'}</button>
       )}
@@ -82,7 +86,7 @@ function ChapterList({ open, onBook }: { open: (id: string, interview: boolean) 
 function ChapterView({ id, onBack, onAnswer }: { id: string; onBack: () => void; onAnswer: () => void }) {
   const chapter = chapterById(id)!
   const { data, isOwner, settings, session, save } = useData()
-  const answers = data.answers.filter((a) => a.chapterId === id && !a.skipped)
+  const answers = data.answers.filter((a) => a.chapterId === id && (!a.skipped || a.contributions?.length))
     .sort((a, b) => chapter.questions.findIndex((q) => q.id === a.questionId) - chapter.questions.findIndex((q) => q.id === b.questionId))
   const story = data.stories.find((s) => s.id === id)
   const [body, setBody] = useState(story?.body ?? '')
@@ -94,7 +98,12 @@ function ChapterView({ id, onBack, onAnswer }: { id: string; onBack: () => void;
   async function write() {
     setBusy(true); setNote('')
     try {
-      const out = await composeChapter({ chapterTitle: chapter.title, storytellerName: name, voice: settings.voice, answers })
+      // Family members' memories go in too, labeled with who shared them so the writer credits them.
+      const material = answers.flatMap((a) => [
+        ...(a.text && !a.skipped ? [{ question: a.question, text: a.text }] : []),
+        ...(a.contributions ?? []).map((c) => ({ question: `${a.question} (as remembered by ${c.from})`, text: c.text })),
+      ])
+      const out = await composeChapter({ chapterTitle: chapter.title, storytellerName: name, voice: settings.voice, answers: material })
       setBody(out.body)
       setEditing(true)
       setNote(out.usedAI
@@ -158,8 +167,11 @@ function ChapterView({ id, onBack, onAnswer }: { id: string; onBack: () => void;
 }
 
 /** Plays every recording in the chapter one after another — the chapter as a podcast in their own voice. */
-function Recordings({ answers }: { answers: { id: string; question: string; text: string; mediaIds: string[] }[] }) {
-  const items = useMemo(() => answers.flatMap((a) => a.mediaIds.filter((m) => mediaKind(m) !== 'image' && mediaKind(m) !== 'file').map((m) => ({ m, q: a.question }))), [answers])
+function Recordings({ answers }: { answers: Answer[] }) {
+  const items = useMemo(() => answers.flatMap((a) => [
+    ...a.mediaIds.map((m) => ({ m, q: a.question })),
+    ...(a.contributions ?? []).flatMap((c) => c.mediaIds.map((m) => ({ m, q: `${c.from}: ${a.question}` }))),
+  ]).filter(({ m }) => mediaKind(m) === 'audio' || mediaKind(m) === 'video'), [answers])
   const [playing, setPlaying] = useState<number | null>(null)
   const { store } = useData()
   const audio = useRef<HTMLAudioElement>(null)
@@ -191,6 +203,13 @@ function Recordings({ answers }: { answers: { id: string; question: string; text
           <p className="label">{a.question}</p>
           {a.text && <p className="answer-text">{a.text}</p>}
           <div className="media-stack">{a.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
+          {a.contributions?.map((c) => (
+            <div key={c.id} className="contribution">
+              <p className="label">{c.from} remembers</p>
+              <p className="answer-text">{c.text}</p>
+              {c.mediaIds.map((m) => <Media key={m} id={m} />)}
+            </div>
+          ))}
         </article>
       ))}
     </section>

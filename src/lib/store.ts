@@ -70,7 +70,7 @@ export const localStore: Store = {
 export const getLocalBlob = (id: ID) => get(`media:${id}`, db) as Promise<Blob | undefined>
 
 export async function wipeLocal() {
-  const keys: CollectionName[] = ['answers', 'stories', 'people', 'relations', 'medical', 'messages', 'members', 'settings']
+  const keys: CollectionName[] = ['answers', 'stories', 'people', 'relations', 'medical', 'messages', 'members', 'asks', 'settings']
   await Promise.all(keys.map((k) => del(k, db)))
   const media = (await idbKeys(db)).filter((k) => String(k).startsWith('media:'))
   await Promise.all(media.map((k) => del(k, db)))

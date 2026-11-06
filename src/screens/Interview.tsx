@@ -5,6 +5,7 @@ import { canRecord, canTranscribe, clock, useRecorder } from '../lib/recorder'
 import { uid } from '../lib/store'
 import type { Answer } from '../lib/types'
 import { FileButton, Icon, Media, ScreenHeader } from '../components/ui'
+import { AskSheet } from '../components/AskSheet'
 
 const KEEPSAKE_OCCASION: Record<string, string> = { scripture: 'Hard days', advice: 'Hard days', quote: 'Anytime', letter: 'Anytime' }
 
@@ -48,6 +49,7 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   const [keep, setKeep] = useState(Boolean(q.keepsake))
   const [busy, setBusy] = useState(false)
   const [followUp, setFollowUp] = useState<string | null>(null)
+  const [asking, setAsking] = useState(false)
   const rec = useRecorder()
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -94,6 +96,7 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
       text: joined,
       mediaIds: [...(existing?.mediaIds ?? []), ...pendingMedia],
       createdAt: existing?.createdAt ?? Date.now(),
+      contributions: existing?.contributions,
     }
     await save('answers', answer)
     if (keep && q.keepsake && text && !followUp) {
@@ -106,7 +109,7 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   }
 
   async function skip() {
-    await save('answers', { id: existing?.id ?? uid(), chapterId, questionId: q.id, question: q.text, text: '', mediaIds: [], skipped: true, createdAt: Date.now() })
+    await save('answers', { id: existing?.id ?? uid(), chapterId, questionId: q.id, question: q.text, text: '', mediaIds: [], skipped: true, createdAt: Date.now(), contributions: existing?.contributions })
     onNext()
   }
 
@@ -118,13 +121,15 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
       <h2 className="question">{asked}</h2>
       {!followUp && q.hint && <p className="hint">{q.hint}</p>}
 
-      {answered && !mode && (
+      {answered && !mode && (existing.text || existing.mediaIds.length > 0) && (
         <div className="saved-answer">
           <p className="label"><Icon name="check" size={16} /> Saved</p>
           {existing.text && <p className="answer-text">{existing.text}</p>}
           <div className="media-stack">{existing.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
         </div>
       )}
+
+      {!mode && <FamilyAnswers questionId={q.id} />}
 
       {mode === 'video' && rec.state === 'recording' && <video ref={videoRef} className="live-video" autoPlay muted playsInline />}
       {rec.state === 'recording' && (
@@ -161,6 +166,9 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
             <button className="option" onClick={() => setMode('write')}><Icon name="type" size={26} />Write</button>
             <FileButton className="option" label="Upload" icon="upload" accept="audio/*,video/*,image/*" onFile={upload} />
           </div>
+          <button className="btn secondary ask-btn" onClick={() => setAsking(true)}>
+            <Icon name="share" size={18} /> Ask someone who knows
+          </button>
           <div className="row between">
             <button className="btn ghost skip" onClick={skip}><Icon name="skip" size={18} /> {answered ? 'Move on' : 'Not this one'}</button>
             {answered && q.followUps?.[0] && !followUp && (
@@ -169,6 +177,29 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
           </div>
         </>
       )}
+      {asking && <AskSheet chapterId={chapterId} questionId={q.id} question={q.text} onClose={() => setAsking(false)} />}
     </section>
+  )
+}
+
+/** Memories relatives sent back for this question, and questions still waiting on an answer. */
+function FamilyAnswers({ questionId }: { questionId: string }) {
+  const { data } = useData()
+  const contributions = data.answers.find((a) => a.questionId === questionId)?.contributions ?? []
+  const waiting = data.asks.filter((a) => a.questionId === questionId && !a.answeredAt)
+  if (!contributions.length && !waiting.length) return null
+  return (
+    <div className="family-answers">
+      {contributions.map((c) => (
+        <div key={c.id} className="contribution">
+          <p className="label">{c.from} remembers</p>
+          <p className="answer-text">{c.text}</p>
+          {c.mediaIds.map((m) => <Media key={m} id={m} />)}
+        </div>
+      ))}
+      {waiting.map((a) => (
+        <p key={a.id} className="waiting"><span className="pulse-dot" /> Asked {a.toName} · waiting for an answer</p>
+      ))}
+    </div>
   )
 }

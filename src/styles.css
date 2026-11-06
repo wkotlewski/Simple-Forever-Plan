@@ -220,6 +220,21 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); outline:
 .media-audio { width: 100%; }
 .media-loading { height: 54px; border-radius: 12px; background: var(--line); opacity: .5; }
 
+/* Ask someone who knows */
+.ask-btn { align-self: stretch; }
+.family-answers { display: flex; flex-direction: column; gap: 10px; }
+.contribution { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); }
+.contribution .label { color: var(--accent); }
+.waiting { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ink-soft); }
+.pulse-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; flex: none; }
+.ask-preview { font-family: var(--serif); font-size: 20px; line-height: 1.35; padding: 12px 14px; border-radius: 14px; background: var(--sage-soft); }
+.ask-page .ask-question { font-size: 28px; text-wrap: balance; }
+.ask-note { font-size: 17px; color: var(--ink-soft); font-style: italic; }
+.center-text { text-align: center; align-items: center; color: var(--accent); }
+.center-text h2, .center-text p { color: var(--ink); }
+.btn.disabled { opacity: .45; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .pulse-dot, .rec-dot, .splash { animation: none; } }
+
 /* Chapter */
 .story-card { display: flex; flex-direction: column; gap: 14px; }
 .prose { font-family: var(--serif); font-size: 20px; line-height: 1.65; display: flex; flex-direction: column; gap: 1em; font-weight: 500; }

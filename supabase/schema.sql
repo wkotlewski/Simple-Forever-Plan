@@ -111,7 +111,7 @@ create policy "owner writes records" on public.records for all
 
 drop policy if exists "family reads records" on public.records;
 create policy "family reads records" on public.records for select using (
-  collection <> 'members'
+  collection not in ('members', 'asks')
   and public.member_medical(vault_id) is not null
   and (collection <> 'medical' or public.member_medical(vault_id))
 );

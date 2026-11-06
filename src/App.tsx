@@ -4,6 +4,9 @@ import { openDrive, resolveCloudAccess, restoreLocal, signOut, type Access } fro
 import { cloudEnabled } from './lib/supabase'
 import { connectGoogle, disconnectGoogle, setOnExpired } from './lib/google'
 import { Icon } from './components/ui'
+import { clearHash, readHash, type ReplyPayload } from './lib/ask'
+import { ReplySheet } from './components/AskSheet'
+import AskAnswer from './screens/AskAnswer'
 import Welcome from './screens/Welcome'
 import Home from './screens/Home'
 import Story from './screens/Story'
@@ -14,7 +17,15 @@ import Share from './screens/Share'
 
 export type Tab = 'home' | 'story' | 'medical' | 'family' | 'keepsakes' | 'share'
 
+// Links from "Ask someone who knows": #ask=… opens the answer page for a relative;
+// #reply=… brings their answer back. Replies wait here until the storyteller's plan is open.
+const PENDING = 'sfp-pending-reply'
+const fromLink = readHash()
+if (fromLink.reply) { try { localStorage.setItem(PENDING, JSON.stringify(fromLink.reply)) } catch { /* private mode */ } }
+if (fromLink.ask || fromLink.reply) clearHash()
+
 export default function App() {
+  const [ask, setAsk] = useState(fromLink.ask)
   const [access, setAccess] = useState<Access | null>(() => restoreLocal())
   const [checking, setChecking] = useState(cloudEnabled)
 
@@ -29,6 +40,7 @@ export default function App() {
     setAccess(null)
   }
 
+  if (ask) return <AskAnswer ask={ask} onDone={() => setAsk(undefined)} />
   if (checking) return <div className="splash"><Icon name="heart" size={40} /></div>
   if (!access) return <Welcome onAccess={setAccess} />
   // The plan lives in Google Drive: reconnect (a tap is needed for Google's window) before showing it.
@@ -86,8 +98,20 @@ function ReconnectBar() {
 function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: Access) => void }) {
   const [tab, setTab] = useState<Tab>('home')
   const { loading, loadError, session, isOwner, store } = useData()
+  const [reply, setReply] = useState<ReplyPayload | null>(() => {
+    try { return JSON.parse(localStorage.getItem(PENDING) ?? 'null') } catch { return null }
+  })
 
   useEffect(() => { window.scrollTo(0, 0) }, [tab])
+  useEffect(() => {
+    const take = (r: ReplyPayload) => setReply(r)
+    const onHash = () => { const r = readHash().reply; if (r) { clearHash(); take(r) } }
+    const onOffer = (e: Event) => take((e as CustomEvent<ReplyPayload>).detail)
+    window.addEventListener('hashchange', onHash)
+    window.addEventListener('sfp-reply', onOffer)
+    return () => { window.removeEventListener('hashchange', onHash); window.removeEventListener('sfp-reply', onOffer) }
+  }, [])
+  const closeReply = () => { try { localStorage.removeItem(PENDING) } catch { /* ignore */ } setReply(null) }
 
   const tabs: { id: Tab; label: string; icon: string; hidden?: boolean }[] = [
     { id: 'home', label: 'Home', icon: 'home' },
@@ -114,6 +138,7 @@ function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: A
             </>
           )}
       </main>
+      {reply && isOwner && !loading && <ReplySheet reply={reply} onClose={closeReply} />}
       <nav className="tabbar" aria-label="Sections">
         {tabs.filter((t) => !t.hidden).map((t) => (
           <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)} aria-current={tab === t.id}>

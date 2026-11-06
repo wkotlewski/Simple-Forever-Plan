@@ -1,10 +1,12 @@
 name: Deploy to GitHub Pages
 
-# Builds the app on every push to main and publishes it to the gh-pages branch,
-# which GitHub Pages serves at https://<owner>.github.io/<repo>/
+# GitHub Pages serves this repo's main branch. On every push, this builds the app and commits
+# the result into the app/ folder, so it is live at https://<owner>.github.io/<repo>/app/
+# (the main link forwards there).
 on:
   push:
     branches: [main]
+    paths-ignore: ['app/**']
   workflow_dispatch:
 
 permissions:
@@ -26,19 +28,17 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          BASE_PATH: /${{ github.event.repository.name }}/
+          BASE_PATH: /${{ github.event.repository.name }}/app/
           # Add these as repository variables to turn on optional features (see README).
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
-      - name: Publish to gh-pages
+      - name: Commit the built app to app/
         run: |
-          cd dist
-          touch .nojekyll
-          cp index.html 404.html
-          git init -q -b gh-pages
+          rm -rf app && mv dist app
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -q -m "Publish ${GITHUB_SHA::7}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
+          git add -A app
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Publish app build ${GITHUB_SHA::7} [skip ci]"
+          git push

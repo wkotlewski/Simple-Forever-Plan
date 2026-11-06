@@ -41,7 +41,7 @@ If someone starts on the phone and later switches to Drive, everything (recordin
 
 ## Deploy
 
-Pushing to `main` builds the app and publishes it to the `gh-pages` branch, which GitHub Pages serves at https://wkotlewski.github.io/Simple-Forever-Plan/ (Settings → Pages → Source: **Deploy from a branch → gh-pages**). To use the backend there, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` under Settings → Secrets and variables → Actions → **Variables**.
+Live at https://wkotlewski.github.io/Simple-Forever-Plan/ . GitHub Pages serves the `main` branch (Settings → Pages → Deploy from a branch → main / root). On every push, a workflow builds the app into the `app/` folder and commits it, and the main page forwards there. To use the backend there, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` under Settings → Secrets and variables → Actions → **Variables**.
 
 ## How it's built
 

@@ -10,6 +10,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" />
     <title>Simple Forever Plan</title>
+    <script>
+      // On GitHub Pages the repo's main branch is served as-is; the built app lives in /app/.
+      if (/\.github\.io$/.test(location.hostname) && !/\/app\//.test(location.pathname)) {
+        var base = location.pathname.replace(/index\.html$/, '')
+        location.replace(base + (base.slice(-1) === '/' ? '' : '/') + 'app/' + location.hash)
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

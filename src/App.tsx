@@ -7,6 +7,7 @@ import { Icon } from './components/ui'
 import { clearHash, readHash, type ReplyPayload } from './lib/ask'
 import { ReplySheet } from './components/AskSheet'
 import AskAnswer from './screens/AskAnswer'
+import { clearAnswers, inboxAvailable, readInbox, type InboxAnswer } from './lib/inbox'
 import Welcome from './screens/Welcome'
 import Home from './screens/Home'
 import Story from './screens/Story'
@@ -97,7 +98,7 @@ function ReconnectBar() {
 
 function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: Access) => void }) {
   const [tab, setTab] = useState<Tab>('home')
-  const { loading, loadError, session, isOwner, store } = useData()
+  const { loading, loadError, session, isOwner, store, settings } = useData()
   const [reply, setReply] = useState<ReplyPayload | null>(() => {
     try { return JSON.parse(localStorage.getItem(PENDING) ?? 'null') } catch { return null }
   })
@@ -112,6 +113,21 @@ function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: A
     return () => { window.removeEventListener('hashchange', onHash); window.removeEventListener('sfp-reply', onOffer) }
   }, [])
   const closeReply = () => { try { localStorage.removeItem(PENDING) } catch { /* ignore */ } setReply(null) }
+
+  // Answers relatives sent with "Send": check the mailbox when the app opens or comes back to the front.
+  const [inbox, setInbox] = useState<InboxAnswer[]>([])
+  const [dismissed] = useState(() => new Set<string>())
+  useEffect(() => {
+    if (!inboxAvailable || loading || !isOwner || !settings.inboxId) return
+    const check = () => readInbox(settings).then((all) => setInbox(all.filter((a) => !dismissed.has(a.id)))).catch(() => null)
+    check()
+    const onVisible = () => document.visibilityState === 'visible' && check()
+    document.addEventListener('visibilitychange', onVisible)
+    const timer = window.setInterval(() => document.visibilityState === 'visible' && check(), 60_000)
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.clearInterval(timer) }
+  }, [loading, isOwner, settings.inboxId, settings.inboxKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const next = inbox[0]
+  const doneWith = (id: string) => { dismissed.add(id); setInbox((q) => q.filter((a) => a.id !== id)) }
 
   const tabs: { id: Tab; label: string; icon: string; hidden?: boolean }[] = [
     { id: 'home', label: 'Home', icon: 'home' },
@@ -139,6 +155,10 @@ function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: A
           )}
       </main>
       {reply && isOwner && !loading && <ReplySheet reply={reply} onClose={closeReply} />}
+      {!reply && next && isOwner && !loading && (
+        <ReplySheet key={next.id} reply={{ v: 1, id: next.askId, q: next.question, from: next.from, text: next.text }} audio={next.audio}
+          onAdded={() => clearAnswers(settings, [next.id])} onClose={() => doneWith(next.id)} />
+      )}
       <nav className="tabbar" aria-label="Sections">
         {tabs.filter((t) => !t.hidden).map((t) => (
           <button key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)} aria-current={tab === t.id}>

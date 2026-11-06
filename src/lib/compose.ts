@@ -1,4 +1,4 @@
-import { getSupabase } from './supabase'
+import { cloudEnabled, getSupabase } from './supabase'
 import type { Answer } from './types'
 
 export interface ComposeInput {
@@ -22,7 +22,7 @@ export async function composeChapter(input: ComposeInput): Promise<ComposeResult
   const answered = input.answers.filter((a) => a.text.trim())
   if (!answered.length) return { body: '', usedAI: false }
 
-  const sb = getSupabase()
+  const sb = cloudEnabled ? getSupabase() : null
   if (sb) {
     const { data, error } = await sb.functions.invoke('story', { body: { ...input, answers: answered } })
     if (!error && data?.body) return { body: data.body as string, usedAI: true }

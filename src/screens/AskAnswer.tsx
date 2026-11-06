@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { replyMessage, smsLink, shareMessage, type AskPayload } from '../lib/ask'
 import { canRecord, canTranscribe, clock, useRecorder } from '../lib/recorder'
+import { inboxAvailable, sendAnswer } from '../lib/inbox'
 import { Icon } from '../components/ui'
 
 /**
@@ -14,6 +15,9 @@ export default function AskAnswer({ ask, onDone }: { ask: AskPayload; onDone: ()
   const [audioUrl, setAudioUrl] = useState('')
   const [step, setStep] = useState<'answer' | 'send' | 'sent'>('answer')
   const [copied, setCopied] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const canSend = inboxAvailable && Boolean(ask.box)
   const rec = useRecorder()
   const from = ask.from.split(' ')[0]
 
@@ -71,8 +75,17 @@ export default function AskAnswer({ ask, onDone }: { ask: AskPayload; onDone: ()
           <label className="field"><span>Your name</span>
             <input id="ask-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
           </label>
-          <button className="btn big" disabled={rec.state === 'recording' || (!text.trim() && !audio) || !name.trim()} onClick={() => setStep('send')}>
-            Next: send it to {from}
+          {sendError && <p className="error">{sendError}</p>}
+          {canSend ? (
+            <button className="btn big" disabled={sending || rec.state === 'recording' || (!text.trim() && !audio) || !name.trim()} onClick={async () => {
+              setSending(true); setSendError('')
+              try { await sendAnswer(ask.box!, ask.id, ask.q, name.trim(), text.trim(), audio); setStep('sent') }
+              catch (e: any) { setSendError(`${e?.message ?? 'Couldn’t send.'} You can also text it instead.`) }
+              setSending(false)
+            }}><Icon name="share" size={20} /> {sending ? 'Sending…' : `Send to ${from}`}</button>
+          ) : null}
+          <button className={canSend ? 'link-btn' : 'btn big'} disabled={rec.state === 'recording' || (!text.trim() && !audio) || !name.trim()} onClick={() => setStep('send')}>
+            {canSend ? 'Or send it by text message' : `Next: send it to ${from}`}
           </button>
         </div>
       )}
@@ -107,9 +120,9 @@ export default function AskAnswer({ ask, onDone }: { ask: AskPayload; onDone: ()
       {step === 'sent' && (
         <div className="card stack center-text">
           <Icon name="heart" size={34} />
-          <h2>Thank you, {name.split(' ')[0]}.</h2>
-          <p className="muted">Once {from} opens your message, your memory becomes part of their story — with your name on it.</p>
-          <button className="btn ghost" onClick={() => setStep('send')}>Didn’t send? Try again</button>
+          <h2>Thank you, {name.trim()}.</h2>
+          <p className="muted">{canSend ? `It’s on its way. Next time ${from} opens the app, your memory becomes part of their story — with your name on it.` : `Once ${from} opens your message, your memory becomes part of their story — with your name on it.`}</p>
+          {!canSend && <button className="btn ghost" onClick={() => setStep('send')}>Didn’t send? Try again</button>}
           <button className="link-btn" onClick={onDone}>Start a story of my own</button>
         </div>
       )}

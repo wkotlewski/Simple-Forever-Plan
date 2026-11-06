@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ensureInbox, inboxAvailable } from '../lib/inbox'
 import { useData } from '../lib/data'
 import { askMessage, findReply, shareMessage, smsLink, type ReplyPayload } from '../lib/ask'
 import { uid } from '../lib/store'
@@ -14,15 +15,25 @@ export function AskSheet({ chapterId, questionId, question, onClose }: { chapter
   const [mine, setMine] = useState(settings.phone ?? '')
   const [sent, setSent] = useState<Ask | null>(null)
   const [copied, setCopied] = useState(false)
+  const [box, setBox] = useState(settings.inboxId)
+  const [preparing, setPreparing] = useState(inboxAvailable && !settings.inboxId)
 
-  const ready = name.trim() && phone.replace(/\D/g, '').length >= 7
+  // Set up the answer mailbox the first time, so relatives can just tap Send.
+  useEffect(() => {
+    if (!preparing) return
+    ensureInbox(settings).then(async (next) => {
+      if (next && next.inboxId !== settings.inboxId) { await save('settings', next); setBox(next.inboxId) }
+    }).finally(() => setPreparing(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ready = name.trim() && phone.replace(/\D/g, '').length >= 7 && !preparing
   const ask: Ask = { id: sent?.id ?? uid(), chapterId, questionId, question, toName: name.trim(), toPhone: phone.trim(), note: note.trim() || undefined, sentAt: Date.now() }
-  const message = askMessage({ v: 1, id: ask.id, q: question, from: settings.storytellerName || session.name, to: ask.toName, note: ask.note, reply: mine.trim() || undefined })
+  const message = askMessage({ v: 1, id: ask.id, q: question, from: settings.storytellerName || session.name, to: ask.toName, note: ask.note, reply: mine.trim() || undefined, box })
 
   async function record() {
     if (sent) return
     await save('asks', ask)
-    if (mine.trim() !== (settings.phone ?? '')) await save('settings', { ...settings, phone: mine.trim() || undefined })
+    if (mine.trim() !== (settings.phone ?? '')) await save('settings', { ...settings, inboxId: box ?? settings.inboxId, phone: mine.trim() || undefined })
     setSent(ask)
   }
 
@@ -32,7 +43,7 @@ export function AskSheet({ chapterId, questionId, question, onClose }: { chapter
         <p className="ask-preview">“{question}”</p>
         {!sent ? (
           <>
-            <p className="muted small">They’ll get a text with a link. They can type or talk their answer, and it comes back to you with their name on it.</p>
+            <p className="muted small">They’ll get a text with a link. They can type or talk their answer{box ? ', tap Send, and it shows up here' : ', and it comes back to you'} with their name on it.</p>
             <label className="field"><span>Who should you ask?</span>
               <input id="ask-to-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Aunt Maria" />
             </label>
@@ -59,7 +70,7 @@ export function AskSheet({ chapterId, questionId, question, onClose }: { chapter
               <button className="btn ghost small" onClick={() => shareMessage(message)}>Share…</button>
               <button className="btn ghost small" onClick={async () => { try { await navigator.clipboard.writeText(message); setCopied(true) } catch { /* not allowed */ } }}>{copied ? 'Copied' : 'Copy message'}</button>
             </div>
-            <p className="muted small">When {name.trim()} answers, tap the link in their text and it’s added here automatically.</p>
+            <p className="muted small">{box ? `When ${name.trim()} sends an answer, it shows up the next time you open the app.` : `When ${name.trim()} answers, tap the link in their text and it’s added here automatically.`}</p>
             <button className="btn" onClick={onClose}>Done</button>
           </>
         )}
@@ -69,10 +80,11 @@ export function AskSheet({ chapterId, questionId, question, onClose }: { chapter
 }
 
 /** Shows a relative's answer and adds it to the story — with their voice recording if they sent one. */
-export function ReplySheet({ reply, onClose }: { reply: ReplyPayload; onClose: () => void }) {
+export function ReplySheet({ reply, audio: sentAudio, onAdded, onClose }: { reply: ReplyPayload; audio?: File; onAdded?: () => void; onClose: () => void }) {
   const { data, save, store } = useData()
   const ask = data.asks.find((a) => a.id === reply.id)
-  const [audio, setAudio] = useState<File | null>(null)
+  const [audio, setAudio] = useState<File | null>(sentAudio ?? null)
+  const sentUrl = useMemo(() => (sentAudio ? URL.createObjectURL(sentAudio) : ''), [sentAudio])
   const [text, setText] = useState(reply.text)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
@@ -92,12 +104,13 @@ export function ReplySheet({ reply, onClose }: { reply: ReplyPayload; onClose: (
       contributions: [...(existing?.contributions ?? []).filter((c) => c.id !== reply.id), contribution],
     })
     if (ask) await save('asks', { ...ask, answeredAt: Date.now() })
+    onAdded?.()
     setBusy(false)
     setDone(true)
   }
 
   return (
-    <Sheet title={`${first} answered your question`} onClose={onClose}>
+    <Sheet title={`${reply.from} answered your question`} onClose={onClose}>
       {done ? (
         <div className="stack center-text">
           <Icon name="heart" size={32} />
@@ -111,7 +124,8 @@ export function ReplySheet({ reply, onClose }: { reply: ReplyPayload; onClose: (
           <label className="field"><span>{reply.from} said</span>
             <textarea id="reply-text" rows={6} value={text} onChange={(e) => setText(e.target.value)} />
           </label>
-          {reply.audio && (
+          {sentUrl && <audio src={sentUrl} controls className="media-audio" />}
+          {reply.audio && !sentAudio && (
             <div className="card inset stack">
               <p className="small">{first} also sent a voice recording in the text. To keep their voice, save it from Messages to your Files, then add it here.</p>
               <label className="btn secondary">
@@ -120,7 +134,7 @@ export function ReplySheet({ reply, onClose }: { reply: ReplyPayload; onClose: (
               </label>
             </div>
           )}
-          <button className="btn big" disabled={busy || !text.trim()} onClick={add}>{busy ? 'Adding…' : 'Add to my story'}</button>
+          <button className="btn big" disabled={busy || (!text.trim() && !audio)} onClick={add}>{busy ? 'Adding…' : 'Add to my story'}</button>
           <button className="btn ghost" onClick={onClose}>Not now</button>
         </div>
       )}

@@ -117,6 +117,9 @@ export interface Settings {
   driveConsentAt?: string
   /** The storyteller's own mobile number, so relatives can text answers back. */
   phone?: string
+  /** This storyteller's private answer mailbox (see supabase/inbox.sql). */
+  inboxId?: string
+  inboxKey?: string
 }
 
 export interface CollectionMap {

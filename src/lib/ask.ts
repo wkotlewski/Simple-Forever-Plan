@@ -12,6 +12,7 @@ export interface AskPayload {
   to: string        // relative's name
   note?: string     // optional personal note from the storyteller
   reply?: string    // storyteller's number to text the answer back to
+  box?: string      // storyteller's answer mailbox, so the relative can just tap Send
 }
 
 /** What the reply link carries back. */

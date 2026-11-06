@@ -3,7 +3,7 @@
 A phone-first app for telling your life story — and leaving your family what they'll need — in your own words and voice.
 
 - **My Story** — a gentle interview, chapter by chapter (Where I Come From, Growing Up, Love & Family, Work & Purpose, Faith, Hard Times, Joys, Words to Keep). Answer by talking, recording video, writing, or uploading. Any question can be skipped. Speech is written down as you talk (where the browser supports it) and can be corrected.
-- **Ask someone who knows** — on any question, text a relative who remembers more. They tap the link, answer by typing or talking (their speech is written down), and text it back. Tapping their reply adds it to the story, credited to them ("Aunt Maria remembers…"), with their voice recording if they sent one. No accounts or server needed: the question and answer travel inside the text messages.
+- **Ask someone who knows** — on any question, text a relative who remembers more. They tap the link, answer by typing or talking (their speech is written down), and text it back. Tapping their reply adds it to the story, credited to them ("Aunt Maria remembers…"), with their voice recording if they sent one. With the answer mailbox connected (below), they just tap **Send** and the answer — voice recording included — shows up the next time the storyteller opens the app; otherwise it travels back inside a text message.
 - **Chapters → book, audiobook, podcast** — answers become a written chapter using only what was said (Claude when the backend is connected; a faithful arrangement of your own words otherwise). Choose first person ("I") or biography. Print or save the whole book as a PDF, have it read aloud, or play a chapter's recordings back-to-back in the storyteller's own voice.
 - **Medical Binder** — labeled sections (Allergies, Medications, Conditions, Doctors & Care Team, Medical History, Insurance & Documents, Care Wishes). Snap the pill bottle, upload doctor's notes, or leave a voice note. An "At a glance" card shows allergies, meds and who to call, and prints as a one-pager.
 - **Family Tree** — add people with photos, years and notes, connect parents, children, partners and siblings, and see everyone laid out by generation.
@@ -31,7 +31,18 @@ People only see this option after you add a Google OAuth client ID, and they mus
 
 If someone starts on the phone and later switches to Drive, everything (recordings included) is moved into their Drive and removed from the phone. People can disconnect in the app or in their Google Account under Security → Third-party connections; their files stay in their Drive.
 
-## Turn on family sharing across devices (Supabase)
+## Answer mailbox for "Ask someone who knows" (Supabase)
+
+Lets relatives tap **Send** instead of texting their answer back. Plans still stay on each person's phone; only answers waiting to be picked up pass through Supabase, and they're deleted once saved.
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. SQL Editor → New query → paste [`supabase/inbox.sql`](supabase/inbox.sql) → Run.
+3. Put the Project URL and publishable (anon) key in `.env.production` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These are meant to be public; the script only lets relatives drop answers in, and only the storyteller's phone (which holds a private key) can read them.
+
+## Turn on family sharing across devices (Supabase accounts)
+
+Also set `VITE_ENABLE_ACCOUNTS=true` for this mode.
+
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. In the SQL editor, run [`supabase/schema.sql`](supabase/schema.sql). It creates the tables, the privacy rules (family read-only, medical hidden unless allowed) and a private file bucket.

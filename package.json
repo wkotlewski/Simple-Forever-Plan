@@ -1,0 +1,38 @@
+{
+  "name": "simple-forever-plan",
+  "version": "1.0.0",
+  "description": "Simple Forever Plan — record your life story, medical notes, family tree and words of comfort for the people you love.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wkotlewski/simple-forever-plan.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/wkotlewski/simple-forever-plan/issues"
+  },
+  "homepage": "https://github.com/wkotlewski/simple-forever-plan#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "idb-keyval": "^6.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^7.0.2",
+    "vite": "^5.4.21"
+  },
+  "private": true,
+  "type": "module"
+}

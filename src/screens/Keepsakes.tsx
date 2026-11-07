@@ -20,8 +20,19 @@ const KINDS: Record<MessageKind, { label: string; source: string }> = {
 }
 
 export default function Keepsakes() {
-  const { data, isOwner, settings } = useData()
+  const { data, isOwner, settings, save } = useData()
   const [occasion, setOccasion] = useState<string | null>(null)
+  // Songs saved with a link but no singer (or title): fill them in once, without changing anything already typed.
+  useEffect(() => {
+    if (!isOwner) return
+    const todo = data.messages.filter((m) => m.kind === 'song' && readListenLink(m.link) && (!m.source?.trim() || !m.text.trim()))
+    todo.forEach(async (m) => {
+      const info = await songInfo(m.link!)
+      if (!info) return
+      const next = { ...m, text: m.text.trim() || info.title || m.text, source: m.source?.trim() || info.artist || m.source }
+      if (next.text !== m.text || next.source !== m.source) await save('messages', next)
+    })
+  }, [isOwner, data.messages.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const [editing, setEditing] = useState<KeepsakeMessage | 'new' | null>(null)
   const list = data.messages
     .filter((m) => !occasion || m.occasions.includes(occasion) || m.occasions.includes('Anytime'))

@@ -28,7 +28,7 @@ export const findSong = (title: string, artist?: string) => {
   return { youtube: `https://www.youtube.com/results?search_query=${q}`, spotify: `https://open.spotify.com/search/${q}` }
 }
 
-const NOISE = /\s*[([](official( music| lyric)?( video| audio| visualizer)?|lyrics?( video)?|audio|hd|hq|4k( remaster(ed)?)?|remaster(ed)?( \d{4})?|music video|video oficial|live)[)\]]/gi
+const NOISE = /\s*[([][^)\]]*\b(official|video|audio|lyrics?|remaster(ed)?|visuali[sz]er|hd|hq|4k|live)\b[^)\]]*[)\]]/gi
 
 /**
  * Looks up the song's title (and singer, when the service says) from its link, so it doesn't have to be typed.
@@ -37,6 +37,17 @@ const NOISE = /\s*[([](official( music| lyric)?( video| audio| visualizer)?|lyri
 export async function songInfo(raw: string): Promise<{ title?: string; artist?: string } | null> {
   const l = readListenLink(raw)
   if (!l) return null
+  // Apple Music links name the exact song: look it up directly.
+  if (l.service === 'Apple Music') {
+    const id = new URL(l.url).searchParams.get('i') ?? l.url.match(/\/(\d{6,})(?:\?|$)/)?.[1]
+    if (id) {
+      try {
+        const j = await (await fetch(`https://itunes.apple.com/lookup?id=${id}`)).json()
+        const t = j.results?.[0]
+        if (t) return { title: t.trackName ?? t.collectionName, artist: t.artistName }
+      } catch { /* fall through */ }
+    }
+  }
   const service = l.service.startsWith('YouTube') ? 'youtube' : l.service === 'Spotify' ? 'spotify' : 'other'
   const endpoint = service === 'youtube' ? `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(l.url)}`
     : service === 'spotify' ? `https://open.spotify.com/oembed?url=${encodeURIComponent(l.url)}`
@@ -54,6 +65,19 @@ export async function songInfo(raw: string): Promise<{ title?: string; artist?: 
       else artist = (j.author_name ?? '').replace(/\s*-\s*Topic$|VEVO$|\s*Official$/i, '').trim() || undefined
       title = title.replace(/\s*\b(ft|feat)\.?\s.+$/i, (x) => x).trim()
     } else if (service === 'other' && j.author_name) artist = j.author_name
+    // Spotify (and some videos) don't say who sings it: look the song up by name in Apple's music catalog.
+    if (title && !artist) artist = await singerOf(title)
     return title ? { title, artist } : null
   } catch { return null }
+}
+
+const norm = (t: string) => t.toLowerCase().replace(/\(.*?\)|\[.*?\]/g, '').replace(/[^a-z0-9]/g, '')
+
+/** The singer of a song, found by its title — the most popular match whose title is the same. */
+async function singerOf(title: string): Promise<string | undefined> {
+  try {
+    const j = await (await fetch(`https://itunes.apple.com/search?entity=song&limit=10&term=${encodeURIComponent(title)}`)).json()
+    const hit = (j.results ?? []).find((r: any) => norm(r.trackName ?? '') === norm(title)) ?? j.results?.[0]
+    return hit?.artistName
+  } catch { return undefined }
 }

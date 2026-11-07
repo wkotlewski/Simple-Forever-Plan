@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../lib/data'
 import { uid } from '../lib/store'
-import { childrenOf, layoutTree, linkPeople, parentsOf, siblingsOf, spousesOf, type Link } from '../lib/tree'
+import { childrenOf, layoutTree, linkPeople, parentsOf, siblingsOf, spousesOf, suggestForNew, suggestGaps, type Link, type LinkSuggestion } from '../lib/tree'
 import type { ID, Person, Relation } from '../lib/types'
 import { Empty, FileButton, Icon, Media, ScreenHeader, Sheet } from '../components/ui'
 import { SuggestionList, useSuggestions } from '../components/Suggestions'
@@ -46,6 +46,7 @@ export default function FamilyTree() {
         action={isOwner && data.people.length > 0 ? <button className="icon-btn ring" onClick={() => setOpen('new')} aria-label="Add a person"><Icon name="plus" /></button> : undefined} />
 
       {isOwner && <SuggestionList items={found} title="People from your stories" />}
+      {isOwner && <GapSuggestions />}
 
       {!family.length ? (
         <Empty icon="tree" title={isOwner ? 'Start your family tree' : 'No family tree yet'}>
@@ -133,8 +134,15 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
   const { data, isOwner, save, remove, store } = useData()
   const isNew = !person
   const [f, setF] = useState<Person>(person ?? { id: uid(), name: '', notes: '', isSelf: !data.people.length })
-  const [linkType, setLinkType] = useState<Link>('child')
-  const [linkTo, setLinkTo] = useState<ID>(data.people.find((p) => p.isSelf)?.id ?? data.people[0]?.id ?? '')
+  // Someone new can be connected to several people at once (e.g. child of Stanley and of Helen).
+  const [links, setLinks] = useState<{ type: Link; to: ID }[]>([{ type: 'child', to: data.people.find((p) => p.isSelf)?.id ?? data.people[0]?.id ?? '' }])
+  const [unticked, setUnticked] = useState<Set<string>>(new Set())
+  const setLink = (i: number, patch: Partial<{ type: Link; to: ID }>) => setLinks((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)))
+  const suggested = useMemo(() => (isNew ? suggestForNew(data.people, data.relations, f.id, links.filter((l) => l.to)) : []), [isNew, data.people, data.relations, f.id, links])
+  const isTicked = (sg: LinkSuggestion) => (sg.optional ? !unticked.has(`off:${sg.key}`) && unticked.has(`on:${sg.key}`) : !unticked.has(`off:${sg.key}`))
+  const tick = (sg: LinkSuggestion, on: boolean) => setUnticked((u) => {
+    const n = new Set(u); n.delete(`on:${sg.key}`); n.delete(`off:${sg.key}`); n.add(`${on ? 'on' : 'off'}:${sg.key}`); return n
+  })
   const [editing, setEditing] = useState(isNew)
   const [asking, setAsking] = useState<boolean | string>(false)
   const drafts = personDrafts(f, data.people, data.relations)
@@ -146,7 +154,11 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
   async function submit() {
     if (!f.name.trim()) return
     await save('people', { ...f, name: f.name.trim() })
-    if (isNew && linkTo && others.length && (!f.circle || f.circle === 'family')) await connect(f.id, linkType, linkTo)
+    if (isNew && others.length && (!f.circle || f.circle === 'family')) {
+      const ctx = { people: [...data.people, f], relations: [...data.relations], save }
+      for (const l of links.filter((l) => l.to)) await linkPeople(ctx, f.id, l.type, l.to)
+      for (const sg of suggested.filter(isTicked)) await linkPeople(ctx, f.id, sg.type, sg.other)
+    }
     if (isNew) onClose(); else setEditing(false)
   }
 
@@ -186,17 +198,32 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
             <TextField id="person-relation" label="In your words" value={f.relation ?? ''} onChange={(v) => setF({ ...f, relation: v })} placeholder="e.g. Apprentice at the shop" />
           )}
           {isNew && others.length > 0 && (!f.circle || f.circle === 'family') && (
-            <div className="grid2">
-              <label className="field"><span>They are the…</span>
-                <select value={linkType} onChange={(e) => setLinkType(e.target.value as Link)}>
-                  {(Object.keys(LINK_LABEL) as Link[]).map((k) => <option key={k} value={k}>{LINK_LABEL[k]}</option>)}
-                </select>
-              </label>
-              <label className="field"><span>…of</span>
-                <select value={linkTo} onChange={(e) => setLinkTo(e.target.value)}>
-                  {others.map((p) => <option key={p.id} value={p.id}>{p.name}{p.isSelf ? ' (you)' : ''}</option>)}
-                </select>
-              </label>
+            <div className="stack connections">
+              <span className="field-title">How are they connected?</span>
+              {links.map((l, i) => (
+                <div key={i} className="connection-row">
+                  <select aria-label="They are the…" value={l.type} onChange={(e) => setLink(i, { type: e.target.value as Link })}>
+                    {(Object.keys(LINK_LABEL) as Link[]).map((k) => <option key={k} value={k}>{LINK_LABEL[k]}</option>)}
+                  </select>
+                  <select aria-label="…of" value={l.to} onChange={(e) => setLink(i, { to: e.target.value })}>
+                    <option value="">Choose someone</option>
+                    {others.map((p) => <option key={p.id} value={p.id}>{p.name}{p.isSelf ? ' (you)' : ''}</option>)}
+                  </select>
+                  {links.length > 1 && <button type="button" className="icon-btn" aria-label="Remove this connection" onClick={() => setLinks((ls) => ls.filter((_, j) => j !== i))}>✕</button>}
+                </div>
+              ))}
+              <button type="button" className="link-btn" onClick={() => setLinks((ls) => [...ls, { type: ls[ls.length - 1]?.type ?? 'child', to: '' }])}>+ Connect to someone else too</button>
+              {suggested.length > 0 && (
+                <div className="link-suggestions">
+                  <p className="label"><Icon name="sparkle" size={14} /> Based on your tree</p>
+                  {suggested.map((sg) => (
+                    <label key={sg.key} className="check">
+                      <input type="checkbox" checked={isTicked(sg)} onChange={(e) => tick(sg, e.target.checked)} />
+                      <span>Also {LINK_LABEL[sg.type].toLowerCase()} <strong>{data.people.find((p) => p.id === sg.other)?.name}</strong> <small className="muted">({sg.reason})</small></span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <TextField id="person-notes" multiline label="Notes" value={f.notes} onChange={(v) => setF({ ...f, notes: v })} placeholder="Where they lived, what they were like, a story about them…"
@@ -270,5 +297,32 @@ function ConnectRow({ person, others, onConnect }: { person: Person; others: Per
         {done ? <><Icon name="check" size={16} /> Connected</> : 'Connect'}
       </button>
     </div>
+  )
+}
+
+/** Connections that look missing on the tree, e.g. Mom is Dad's partner but isn't yet Rose's parent. */
+function GapSuggestions() {
+  const { data, save, settings } = useData()
+  const hidden = new Set(settings.dismissed ?? [])
+  const gaps = suggestGaps(data.people, data.relations).filter((g) => !hidden.has(g.key))
+  if (!gaps.length) return null
+  const name = (id: ID) => data.people.find((p) => p.id === id)?.name ?? ''
+  return (
+    <section className="suggestions" aria-label="Suggested connections">
+      <p className="label"><Icon name="tree" size={14} /> Suggested connections</p>
+      {gaps.slice(0, 6).map((g) => (
+        <div key={g.key} className="suggestion">
+          <div className="suggestion-body">
+            <strong>{name(g.person)} — {LINK_LABEL[g.type].toLowerCase()} {name(g.other)}?</strong>
+            <small>Because {g.reason}.</small>
+          </div>
+          <div className="suggestion-actions">
+            <button className="btn small" onClick={() => linkPeople({ people: data.people, relations: [...data.relations], save }, g.person, g.type, g.other)}>Yes</button>
+            <button className="icon-btn" aria-label={`Not right: ${name(g.person)} and ${name(g.other)}`}
+              onClick={() => save('settings', { ...settings, dismissed: [...(settings.dismissed ?? []), g.key] })}>✕</button>
+          </div>
+        </div>
+      ))}
+    </section>
   )
 }

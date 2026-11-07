@@ -81,9 +81,13 @@ type Save = <K extends 'people' | 'relations'>(c: K, item: CollectionMap[K]) => 
 export async function linkPeople(ctx: { people: Person[]; relations: Relation[]; save: Save }, personId: ID, type: Link, otherId: ID) {
   const { relations, save } = ctx
   const name = (id: ID) => ctx.people.find((p) => p.id === id)?.name ?? ''
-  const add = (r: Omit<Relation, 'id'>) => {
+  // Records each new connection in ctx.relations too, so several connections made in a row see each other.
+  const add = async (r: Omit<Relation, 'id'>) => {
     const dup = relations.some((x) => x.type === r.type && ((x.from === r.from && x.to === r.to) || (r.type === 'spouse' && x.from === r.to && x.to === r.from)))
-    return dup ? Promise.resolve() : save('relations', { id: uid(), ...r })
+    if (dup) return
+    const rel = { id: uid(), ...r }
+    relations.push(rel)
+    await save('relations', rel)
   }
   if (type === 'parent') return add({ type: 'parent', from: personId, to: otherId })
   if (type === 'child') return add({ type: 'parent', from: otherId, to: personId })
@@ -97,4 +101,82 @@ export async function linkPeople(ctx: { people: Person[]; relations: Relation[];
     ps = [placeholder.id]
   }
   for (const p of ps) await add({ type: 'parent', from: p, to: personId })
+}
+
+// ---------- Suggested connections ----------
+
+export interface LinkSuggestion {
+  key: string
+  /** `person` is the {type} of `other`, e.g. Helen is the parent of Rose. */
+  person: ID
+  type: Link
+  other: ID
+  /** Why it's suggested, using names, e.g. "Helen is Stanley's partner". */
+  reason: string
+  /** Suggested but not assumed (e.g. a partner's children may be step-children). */
+  optional?: boolean
+}
+
+const first = (people: Person[], id: ID) => people.find((p) => p.id === id)?.name.split(' ')[0] ?? ''
+const isParent = (rels: Relation[], parent: ID, child: ID) => rels.some((r) => r.type === 'parent' && r.from === parent && r.to === child)
+const arePartners = (rels: Relation[], a: ID, b: ID) => rels.some((r) => r.type === 'spouse' && ((r.from === a && r.to === b) || (r.from === b && r.to === a)))
+
+/** For someone being added with these connections, other connections that probably also apply. */
+export function suggestForNew(people: Person[], rels: Relation[], newId: ID, links: { type: Link; to: ID }[]): LinkSuggestion[] {
+  const out: LinkSuggestion[] = []
+  const chosen = new Set(links.map((l) => `${l.type}:${l.to}`))
+  const add = (s: Omit<LinkSuggestion, 'key' | 'person'>) => {
+    const key = `${s.type}:${s.other}`
+    if (chosen.has(key) || out.some((o) => o.key === key)) return
+    out.push({ ...s, key, person: newId })
+  }
+  for (const l of links) {
+    const n = first(people, l.to)
+    if (l.type === 'child') {
+      // A child of Dad is usually also a child of Dad's partner.
+      for (const sp of spousesOf(l.to, rels)) add({ type: 'child', other: sp, reason: `${first(people, sp)} is ${n}’s partner` })
+    }
+    if (l.type === 'parent') {
+      // A parent of Rose is usually also a parent of Rose's brothers and sisters, and the partner of Rose's other parent.
+      for (const sib of siblingsOf(l.to, rels)) add({ type: 'parent', other: sib, reason: `${first(people, sib)} is ${n}’s brother or sister` })
+      for (const p of parentsOf(l.to, rels)) add({ type: 'spouse', other: p, reason: `${first(people, p)} is also ${n}’s parent` })
+    }
+    if (l.type === 'spouse') {
+      for (const c of childrenOf(l.to, rels)) add({ type: 'parent', other: c, reason: `${first(people, c)} is ${n}’s child`, optional: true })
+    }
+  }
+  return out
+}
+
+/** Connections that look missing from the tree as it stands. */
+export function suggestGaps(people: Person[], rels: Relation[]): LinkSuggestion[] {
+  const out: LinkSuggestion[] = []
+  const add = (s: Omit<LinkSuggestion, 'key'>) => {
+    const key = `gap:${s.person}:${s.type}:${s.other}`
+    const mirror = s.type === 'spouse' ? `gap:${s.other}:spouse:${s.person}` : ''
+    if (!out.some((o) => o.key === key || o.key === mirror)) out.push({ ...s, key })
+  }
+  const family = new Set(people.filter((p) => !p.circle || p.circle === 'family').map((p) => p.id))
+  for (const c of family) {
+    const ps = parentsOf(c, rels)
+    // Rule 1: Dad is Rose's parent and Mom is Dad's partner → Mom is probably Rose's parent too.
+    if (ps.length === 1) {
+      for (const sp of spousesOf(ps[0], rels)) {
+        if (!isParent(rels, sp, c)) add({ person: sp, type: 'parent', other: c, reason: `${first(people, sp)} is ${first(people, ps[0])}’s partner` })
+      }
+    }
+    // Rule 2: two parents of the same child who aren't connected → probably partners.
+    if (ps.length === 2 && !arePartners(rels, ps[0], ps[1])) {
+      add({ person: ps[0], type: 'spouse', other: ps[1], reason: `both are ${first(people, c)}’s parents`, optional: true })
+    }
+    // Rule 3: brothers and sisters usually share both parents.
+    if (ps.length === 1) {
+      for (const sib of siblingsOf(c, rels)) {
+        for (const other of parentsOf(sib, rels)) {
+          if (!ps.includes(other)) add({ person: other, type: 'parent', other: c, reason: `${first(people, other)} is the parent of ${first(people, sib)}, ${first(people, c)}’s brother or sister` })
+        }
+      }
+    }
+  }
+  return out
 }

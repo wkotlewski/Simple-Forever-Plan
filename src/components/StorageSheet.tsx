@@ -18,6 +18,8 @@ export default function StorageSheet({ onClose, onSwitch, onDisconnect }: {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  // A file that's made and waiting for one more tap to open the phone's save sheet.
+  const [ready, setReady] = useState<{ file: File; what: string; backup?: boolean } | null>(null)
   const [withMedia, setWithMedia] = useState(true)
   const [withMedical, setWithMedical] = useState(session.canViewMedical)
   const [showDrive, setShowDrive] = useState(false)
@@ -33,6 +35,13 @@ export default function StorageSheet({ onClose, onSwitch, onDisconnect }: {
   }
   const result = (r: string, what: string) =>
     r === 'shared' ? `${what} saved.` : r === 'downloaded' ? `${what} downloaded to this device.` : ''
+  /** Saves a finished file; if the phone wants a fresh tap first, shows the "tap to save" button instead. */
+  const deliver = async (file: File, what: string, backup = false) => {
+    const r = await saveToApp(file)
+    if (r === 'needs-tap') { setReady({ file, what, backup }); return `${what} is ready.` }
+    if (backup && r !== 'cancelled' && isOwner) await save('settings', { ...settings, lastBackupAt: Date.now() })
+    return result(r, what)
+  }
 
   if (showDrive) {
     return (
@@ -65,21 +74,32 @@ export default function StorageSheet({ onClose, onSwitch, onDisconnect }: {
           {session.canViewMedical && (
             <label className="check"><input id="copy-medical" type="checkbox" checked={withMedical} onChange={(e) => setWithMedical(e.target.checked)} /> Include medical information</label>
           )}
+          {ready && (
+            <div className="ready-save stack tight">
+              <button className="btn" onClick={() => run(async () => {
+                const { file, what, backup } = ready
+                const r = await saveToApp(file, { afterTap: true })
+                setReady(null)
+                if (backup && r !== 'cancelled' && isOwner) await save('settings', { ...settings, lastBackupAt: Date.now() })
+                return result(r, what)
+              })}><Icon name="upload" size={18} /> {ready.what} is ready — tap to save it</button>
+              <p className="muted small">Choose where to keep it: Files / iCloud Drive, Google Drive, email…</p>
+            </div>
+          )}
           <button className="btn" disabled={busy} onClick={() => run(async () => {
+            setReady(null)
             setStatus('Making a readable PDF…')
             const name = settings.storytellerName || session.name
             const pdf = await makePdf(`The Story of ${name}`, planSections(visible, name, { medical: withMedical }))
             const file = await makeBackup(store, visible, withMedia, setStatus, pdf)
-            const r = await saveToApp(file)
-            if (r !== 'cancelled' && isOwner) await save('settings', { ...settings, lastBackupAt: Date.now() })
-            return result(r, 'Backup')
+            return deliver(file, 'Your backup', true)
           })}><Icon name="upload" size={18} /> Save a full backup (ZIP)</button>
           <button className="btn secondary" disabled={busy} onClick={() => run(async () => {
             const name = settings.storytellerName || session.name
             const pdf = await makePdf(`The Story of ${name}`, planSections(visible, name, { medical: withMedical }))
-            return result(await saveToApp(new File([pdf], `The Story of ${name}.pdf`, { type: 'application/pdf' })), 'PDF')
+            return deliver(new File([pdf], `The Story of ${name}.pdf`, { type: 'application/pdf' }), 'Your PDF')
           })}><Icon name="book" size={18} /> Save as a PDF to read or print</button>
-          <button className="btn secondary" disabled={busy} onClick={() => run(async () => result(await saveToApp(makeSpreadsheet(visible, withMedical)), 'Spreadsheet'))}>
+          <button className="btn secondary" disabled={busy} onClick={() => run(async () => deliver(makeSpreadsheet(visible, withMedical), 'Your spreadsheet'))}>
             <Icon name="type" size={18} /> Save as a spreadsheet
           </button>
           <p className="muted small">The spreadsheet opens in Google Sheets, Numbers or Excel. It holds the written information; recordings stay in the full copy.</p>

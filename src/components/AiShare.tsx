@@ -22,6 +22,7 @@ export function AiShare({ kind, chapterId, onResult, resultLabel }: {
   const [pasted, setPasted] = useState('')
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
+  const [readyPdf, setReadyPdf] = useState<File | null>(null)
   const name = settings.storytellerName || session.name
   const chapterTitle = chapterId ? chapterById(chapterId)?.title : undefined
   const sections = () => planSections(data, name, { medical: false, chapterId })
@@ -39,7 +40,8 @@ export function AiShare({ kind, chapterId, onResult, resultLabel }: {
     try {
       const file = new File([await makePdf(title, sections(), instructions.replace(/----\s*$/, ''))], `${title}.pdf`, { type: 'application/pdf' })
       const r = await saveToApp(file)
-      if (r !== 'cancelled') setStatus('Saved. Attach the PDF in your AI app and send it.')
+      if (r === 'needs-tap') setReadyPdf(file)
+      else if (r !== 'cancelled') setStatus('Saved. Attach the PDF in your AI app and send it.')
     } catch (e: any) { setStatus(e?.message ?? 'Couldn’t save the PDF.') }
     setBusy(false)
   }
@@ -65,6 +67,12 @@ export function AiShare({ kind, chapterId, onResult, resultLabel }: {
           <button className="btn small" disabled={!pasted.trim()} onClick={async () => { await onResult(pasted.trim()); setPasted(''); setStatus('Added. Read it through and fix anything that isn’t right.') }}>Use this</button>
         </li>
       </ol>
+      {readyPdf && (
+        <button className="btn small" onClick={async () => {
+          const r = await saveToApp(readyPdf, { afterTap: true }); setReadyPdf(null)
+          if (r !== 'cancelled') setStatus('Saved. Attach the PDF in your AI app and send it.')
+        }}><Icon name="upload" size={16} /> PDF is ready — tap to save it</button>
+      )}
       {status && <p className="muted small" role="status">{status}</p>}
     </section>
   )

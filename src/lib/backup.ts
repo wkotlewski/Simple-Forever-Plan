@@ -169,7 +169,12 @@ export function makeSpreadsheet(data: Data, includeMedical: boolean): File {
  * Hands the file to the phone's share sheet so the person picks where it goes (Files, iCloud, Google Drive,
  * Dropbox, Mail…). Falls back to a regular download where sharing files isn't supported.
  */
-export async function saveToApp(file: File): Promise<'shared' | 'downloaded' | 'cancelled'> {
+/**
+ * Opens the phone's save/share sheet for a file (Files, Google Drive, Voice Memos, email…).
+ * Phones only open that sheet straight after a tap. If making the file took a while (a big backup), the tap has
+ * "expired" and this returns 'needs-tap' — the caller then shows a button, and calls again with { afterTap: true }.
+ */
+export async function saveToApp(file: File, opts: { afterTap?: boolean } = {}): Promise<'shared' | 'downloaded' | 'cancelled' | 'needs-tap'> {
   // Inside a Claude preview, files can only be saved through the viewer's own save prompt.
   const claude = (window as any).claude
   if (claude?.use) {
@@ -186,6 +191,7 @@ export async function saveToApp(file: File): Promise<'shared' | 'downloaded' | '
       return 'shared'
     } catch (e: any) {
       if (e?.name === 'AbortError') return 'cancelled'
+      if (e?.name === 'NotAllowedError' && !opts.afterTap) return 'needs-tap'
     }
   }
   const url = URL.createObjectURL(file)

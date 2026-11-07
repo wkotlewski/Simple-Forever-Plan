@@ -180,7 +180,7 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
           {justSaved && lastRecording && (
             <div className="copy-recording">
               <button className="btn secondary small" onClick={async () => {
-                try { const r = await saveToApp(lastRecording); if (r !== 'cancelled') setCopyNote('Copy saved. Your recording is also kept here in the app.') }
+                try { const r = await saveToApp(lastRecording, { afterTap: true }); if (r !== 'cancelled') setCopyNote('Copy saved. Your recording is also kept here in the app.') }
                 catch (e: any) { setCopyNote(e?.message ?? 'Couldn’t save a copy.') }
               }}><Icon name="upload" size={16} /> Save a copy to my phone</button>
               <p className="muted small">{copyNote || 'Extra safety: keep this recording in Files, iCloud, Google Drive or any app you choose.'}</p>

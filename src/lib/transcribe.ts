@@ -15,14 +15,26 @@ const RATE = 16000
 const PIECE = 12 * RATE // a few sentences at a time
 const RUNNING = 'sfp-transcribe-running'
 const LIGHT = 'sfp-transcribe-light'
+const BIG_FAILED = 'sfp-transcribe-accurate-failed'
+const TINY = 'Xenova/whisper-tiny', BASE = 'Xenova/whisper-base'
 
 const isPhone = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
 const storage = { get: (k: string) => { try { return localStorage.getItem(k) } catch { return null } }, set: (k: string, v: string | null) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch { /* private mode */ } } }
 
 // If a previous try never finished (the page was closed for using too much memory), stay on the lightest setting.
-if (storage.get(RUNNING)) { storage.set(LIGHT, '1'); storage.set(RUNNING, null) }
+// (If it was the more accurate tool that closed the page, only that one is turned off.)
+const crashed = storage.get(RUNNING)
+if (crashed) { storage.set(LIGHT, '1'); if (crashed === BASE) storage.set(BIG_FAILED, '1'); storage.set(RUNNING, null) }
 
-const model = () => (isPhone || storage.get(LIGHT) ? 'Xenova/whisper-tiny' : 'Xenova/whisper-base')
+/** Quick: the small tool on phones. Accurate: the larger tool (slower, bigger one-time download), if this phone can run it. */
+const model = (accurate = false) => {
+  if (accurate && !storage.get(BIG_FAILED)) return BASE
+  return isPhone || storage.get(LIGHT) ? TINY : BASE
+}
+/** Whether the more accurate tool would give anything better than the quick one here. */
+export const canBeMoreAccurate = () => model(true) !== model(false)
+/** True when the more accurate tool was tried and was too much for this phone. */
+export const accurateFailedHere = () => !!storage.get(BIG_FAILED)
 
 let worker: Worker | null = null
 let nextId = 1
@@ -79,7 +91,7 @@ function pieces(audio: Float32Array): Float32Array[] {
   return out
 }
 
-function runPiece(audio: Float32Array, onProgress: (p: TranscribeProgress) => void): Promise<string> {
+function runPiece(audio: Float32Array, name: string, onProgress: (p: TranscribeProgress) => void): Promise<string> {
   const w = getWorker()
   const id = nextId++
   return new Promise((resolve, reject) => {
@@ -102,21 +114,23 @@ function runPiece(audio: Float32Array, onProgress: (p: TranscribeProgress) => vo
     }
     w.addEventListener('message', onMessage)
     w.addEventListener('error', onError)
-    w.postMessage({ id, model: model(), audio }, [audio.buffer])
+    w.postMessage({ id, model: name, audio }, [audio.buffer])
   })
 }
 
-export async function transcribeBlob(blob: Blob, onProgress: (p: TranscribeProgress) => void = () => {}): Promise<string> {
+export async function transcribeBlob(blob: Blob, onProgress: (p: TranscribeProgress) => void = () => {}, opts: { accurate?: boolean } = {}): Promise<string> {
   onProgress({ stage: 'preparing' })
   const all = pieces(await toSamples(blob))
-  storage.set(RUNNING, '1')
+  const name = model(opts.accurate)
+  files.clear()
+  storage.set(RUNNING, name)
   try {
     const words: string[] = []
     const soFar = () => words.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
     for (let i = 0; i < all.length; i++) {
       onProgress({ stage: 'working', piece: i + 1, pieces: all.length, soFar: soFar() })
       // Each piece is written out on its own, so the words appear a few lines at a time.
-      words.push(await runPiece(all[i], (p) => onProgress(p.stage === 'downloading' ? p : { stage: 'working', piece: i + 1, pieces: all.length, soFar: soFar() })))
+      words.push(await runPiece(all[i], name, (p) => onProgress(p.stage === 'downloading' ? p : { stage: 'working', piece: i + 1, pieces: all.length, soFar: soFar() })))
       all[i] = new Float32Array(0) // let the finished piece go
     }
     return soFar()

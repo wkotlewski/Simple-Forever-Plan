@@ -34,7 +34,8 @@ self.onmessage = async (e: MessageEvent<{ id: number; model: string; audio: Floa
   try {
     const run = await load(model, post)
     post({ type: 'working' })
-    const out = await run(audio, { task: 'transcribe' })
+    // Telling it the language (instead of letting it guess from a few seconds) makes the words noticeably more accurate.
+    const out = await run(audio, { task: 'transcribe', language: 'english' })
     post({ type: 'done', text: String(out?.text ?? '').replace(/\s+/g, ' ').trim() })
   } catch (err: any) {
     post({ type: 'error', message: String(err?.message ?? err) })

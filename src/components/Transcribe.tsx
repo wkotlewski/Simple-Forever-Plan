@@ -51,11 +51,14 @@ export function Transcribe({ answer }: { answer: Answer }) {
           <span>
             {progress.stage === 'downloading'
               ? `Getting the speech tool ready — first time only (${progress.percent}%)`
-              : progress.stage === 'preparing' ? 'Opening the recording…' : 'Writing out the words…'}
+              : progress.stage === 'preparing' ? 'Opening the recording…'
+              : progress.pieces > 1 ? `Writing out the words… part ${progress.piece} of ${progress.pieces}` : 'Writing out the words…'}
           </span>
           {progress.stage === 'downloading' && <span className="bar"><span style={{ width: `${progress.percent}%` }} /></span>}
+          {progress.stage === 'working' && progress.pieces > 1 && <span className="bar"><span style={{ width: `${Math.round(((progress.piece - 1) / progress.pieces) * 100)}%` }} /></span>}
         </div>
       )}
+      {progress?.stage === 'working' && progress.soFar && <p className="answer-text so-far">{progress.soFar}</p>}
       {error && <p className="error">{error}</p>}
       {!progress && (
         <>

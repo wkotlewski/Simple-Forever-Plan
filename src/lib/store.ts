@@ -61,12 +61,13 @@ export const localStore: Store = {
   },
   async putMedia(blob) {
     const id = `${kindOf(blob)}:${uid()}`
-    await set(`media:${id}`, blob, db)
+    // Stored as plain bytes + type: every browser can keep that (some can't store file objects directly).
+    await set(`media:${id}`, { type: blob.type, data: await blob.arrayBuffer() }, db)
     return id
   },
   async mediaUrl(id) {
     if (urlCache.has(id)) return urlCache.get(id)!
-    const blob = (await get(`media:${id}`, db)) as Blob | undefined
+    const blob = await getLocalBlob(id)
     if (!blob) return null
     const url = URL.createObjectURL(blob)
     urlCache.set(id, url)
@@ -80,7 +81,11 @@ export async function listLocalMediaIds(): Promise<ID[]> {
 }
 
 /** The original saved file behind a this-device media id (used when moving everything to Google Drive). */
-export const getLocalBlob = (id: ID) => get(`media:${id}`, db) as Promise<Blob | undefined>
+export async function getLocalBlob(id: ID): Promise<Blob | undefined> {
+  const v = (await get(`media:${id}`, db)) as Blob | { type: string; data: ArrayBuffer } | undefined
+  if (!v) return undefined
+  return v instanceof Blob ? v : new Blob([v.data], { type: v.type })
+}
 
 export async function wipeLocal() {
   const keys: CollectionName[] = ['answers', 'stories', 'people', 'relations', 'medical', 'messages', 'members', 'asks', 'insights', 'settings']

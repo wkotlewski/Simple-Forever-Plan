@@ -156,7 +156,7 @@ function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: A
       </main>
       {reply && isOwner && !loading && <ReplySheet reply={reply} onClose={closeReply} />}
       {!reply && next && isOwner && !loading && (
-        <ReplySheet key={next.id} reply={{ v: 1, id: next.askId, q: next.question, from: next.from, text: next.text }} audio={next.audio}
+        <ReplySheet key={next.id} answerId={next.id} reply={{ v: 1, id: next.askId, q: next.question, from: next.from, text: next.text }} audio={next.audio}
           onAdded={() => clearAnswers(settings, [next.id])} onClose={() => doneWith(next.id)} />
       )}
       <nav className="tabbar" aria-label="Sections">

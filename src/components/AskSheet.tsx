@@ -31,19 +31,31 @@ const digits = (p: string) => p.replace(/\D/g, '')
  * with other ready-made questions to pick from. Each person gets their own link, so every answer comes back
  * with their name on it.
  */
-export function AskSheet({ chapterId, questionId, target, question, suggestions, onClose }: {
-  chapterId?: string; questionId?: string; target?: Ask['target']; question: string; suggestions?: (string | Draft)[]; onClose: () => void
+export interface Survey {
+  title: string
+  /** Finishes "I'm working on …" in the text. */
+  why: string
+  items: { question: string; label: string; target: Ask['target']; checked?: boolean }[]
+}
+
+export function AskSheet({ chapterId, questionId, target, question, suggestions, survey, onClose }: {
+  chapterId?: string; questionId?: string; target?: Ask['target']; question: string; suggestions?: (string | Draft)[]
+  /** Send several questions in one link instead of one question. */
+  survey?: Survey
+  onClose: () => void
 }) {
   const { data, save, settings, session } = useData()
   const [q, setQ] = useState(question)
   const [people, setPeople] = useState<Recipient[]>([{ name: '', phone: '' }])
   const [note, setNote] = useState('')
   const [mine, setMine] = useState(settings.phone ?? '')
-  const [sent, setSent] = useState<{ ask: Ask; message: string; texted: boolean }[] | null>(null)
+  const [sent, setSent] = useState<{ ask: Ask; asks: Ask[]; message: string; texted: boolean }[] | null>(null)
   const [box, setBox] = useState(settings.inboxId)
   const [preparing, setPreparing] = useState(inboxAvailable && !settings.inboxId)
   const [showMessage, setShowMessage] = useState(false)
   const [contactError, setContactError] = useState('')
+  const [picked, setPicked] = useState<Set<number>>(() => new Set((survey?.items ?? []).flatMap((it, i) => (it.checked === false ? [] : [i]))))
+  const chosen = (survey?.items ?? []).filter((_, i) => picked.has(i))
 
   // People you've asked before, so they're one tap away.
   const recent = useMemo(() => {
@@ -67,7 +79,8 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
   const field = drafts.find((d) => d.text === q)?.field
   const askTarget: Ask['target'] = target?.kind === 'person' ? { kind: 'person', personId: target.personId, ...(field ? { field } : {}) } : target
   const filled = people.filter((p) => p.name.trim() && digits(p.phone).length >= 7)
-  const ready = q.trim() && filled.length > 0 && !preparing
+  const hasQuestion = survey ? chosen.length > 0 : !!q.trim()
+  const ready = hasQuestion && filled.length > 0 && !preparing
   const from = settings.storytellerName || session.name
 
   const addPeople = (list: Recipient[]) => setPeople((cur) => {
@@ -81,18 +94,27 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
 
   // What the answer is for, said in the text so family know why they're being asked.
   const aboutPerson = askTarget?.kind === 'person' ? data.people.find((p) => p.id === askTarget.personId) : undefined
-  const why = askTarget?.kind === 'medical' ? 'our family health history, so doctors and the generations after us know what runs in the family'
+  const why = survey ? survey.why
+    : askTarget?.kind === 'medical' ? 'our family health history, so doctors and the generations after us know what runs in the family'
     : aboutPerson ? (aboutPerson.isSelf ? 'our family tree' : `our family tree — getting ${aboutPerson.name}’s details right`)
     : chapterId ? `my life story — the part about “${CHAPTERS.find((c) => c.id === chapterId)?.title ?? 'my life'}”`
     : 'my life story'
 
-  function makeOne(r: Recipient) {
-    const ask: Ask = { id: uid(), chapterId, questionId, target: askTarget, question: q.trim(), toName: r.name.trim(), toPhone: r.phone.trim(), note: note.trim() || undefined, sentAt: Date.now() }
-    return { ask, message: askMessage({ v: 1, id: ask.id, q: ask.question, from, to: ask.toName, note: ask.note, reply: mine.trim() || undefined, box }, why), texted: false }
+  function makeOne(r: Recipient): { ask: Ask; asks: Ask[]; message: string; texted: boolean } {
+    const base = { toName: r.name.trim(), toPhone: r.phone.trim(), note: note.trim() || undefined, sentAt: Date.now() }
+    const common = { from, to: base.toName, note: base.note, reply: mine.trim() || undefined, box }
+    if (survey) {
+      // One link for the whole survey; each question is still its own ask, so each answer lands in the right place.
+      const surveyId = uid()
+      const asks: Ask[] = chosen.map((it, i) => ({ id: `${surveyId}-${i}`, surveyId, target: it.target, question: it.question, ...base }))
+      return { ask: asks[0], asks, message: askMessage({ v: 1, id: surveyId, q: survey.title, qs: chosen.map((it) => it.question), ...common }, why), texted: false }
+    }
+    const ask: Ask = { id: uid(), chapterId, questionId, target: askTarget, question: q.trim(), ...base }
+    return { ask, asks: [ask], message: askMessage({ v: 1, id: ask.id, q: ask.question, ...common }, why), texted: false }
   }
 
   async function prepare(list = filled.map(makeOne)) {
-    for (const it of list) await save('asks', it.ask)
+    for (const it of list) for (const a of it.asks) await save('asks', a)
     if (mine.trim() !== (settings.phone ?? '')) await save('settings', { ...settings, inboxId: box ?? settings.inboxId, phone: mine.trim() || undefined })
     setSent(list)
     return list
@@ -114,24 +136,40 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
   }
 
   const [copied, setCopied] = useState<string | null>(null)
-  const previewMsg = askMessage({ v: 1, id: 'preview', q: q.trim(), from, to: filled[0]?.name.trim() || 'there', note: note.trim() || undefined, reply: mine.trim() || undefined, box }, why)
+  const previewMsg = askMessage({ v: 1, id: 'preview', q: survey ? survey.title : q.trim(), qs: survey ? chosen.map((c) => c.question) : undefined, from, to: filled[0]?.name.trim() || 'there', note: note.trim() || undefined, reply: mine.trim() || undefined, box }, why)
 
   return (
     <Sheet title="Ask family" onClose={onClose}>
       <div className="stack">
         {!sent ? (
           <>
-            <div className="field">
-              <span className="field-title">What do you want to ask?</span>
-              {options.length > 1 && (
-                <div className="draft-options">
-                  {options.map((o) => (
-                    <button key={o} type="button" className={`draft-option ${q === o ? 'on' : ''}`} onClick={() => setQ(o)}>{o}</button>
+            {survey ? (
+              <div className="field">
+                <span className="field-title">Questions in this survey <small className="muted">Uncheck any you don’t need.</small></span>
+                <div className="survey-pick stack tight">
+                  {survey.items.map((it, i) => (
+                    <label key={i} className="check">
+                      <input type="checkbox" checked={picked.has(i)} onChange={() => setPicked((cur) => { const n = new Set(cur); n.has(i) ? n.delete(i) : n.add(i); return n })} />
+                      <span><strong>{it.label}</strong><small className="muted"> — {it.question}</small></span>
+                    </label>
                   ))}
                 </div>
-              )}
-            </div>
-            <TextField id="ask-question" multiline rows={2} label={options.length > 1 ? 'Your question (change it however you like)' : 'Your question'} value={q} onChange={setQ} />
+              </div>
+            ) : (
+              <>
+              <div className="field">
+                <span className="field-title">What do you want to ask?</span>
+                {options.length > 1 && (
+                  <div className="draft-options">
+                    {options.map((o) => (
+                      <button key={o} type="button" className={`draft-option ${q === o ? 'on' : ''}`} onClick={() => setQ(o)}>{o}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <TextField id="ask-question" multiline rows={2} label={options.length > 1 ? 'Your question (change it however you like)' : 'Your question'} value={q} onChange={setQ} />
+              </>
+            )}
 
             <div className="field">
               <span className="field-title">Who should you ask? <small className="muted">You can pick more than one.</small></span>
@@ -187,19 +225,19 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
                   setSent([{ ...one, texted: true }])
                   window.location.href = smsLink(one.ask.toPhone, one.message)
                 }}>
-                <Icon name="share" size={20} /> Text {filled[0]?.name.trim() || 'them'} the question
+                <Icon name="share" size={20} /> Text {filled[0]?.name.trim() || 'them'} the {survey ? 'survey' : 'question'}
               </a>
             ) : (
               <button className="btn big" disabled={!ready} onClick={() => prepare()}><Icon name="share" size={20} /> Get texts ready for {filled.length} people</button>
             )}
-            <button className="btn secondary" disabled={!q.trim() || preparing} onClick={copyInstead}>
+            <button className="btn secondary" disabled={!hasQuestion || preparing} onClick={copyInstead}>
               <Icon name="type" size={18} /> Copy the message to paste in a text thread
             </button>
             <p className="muted small">Each person gets their own link. They can type or talk their answer{box ? ', tap Submit, and it shows up here' : ', and it comes back to you'} with their name on it.</p>
           </>
         ) : (
           <>
-            <p className="ask-preview">“{q.trim()}”</p>
+            <p className="ask-preview">{survey ? `${survey.title} — ${chosen.length} questions` : `“${q.trim()}”`}</p>
             {copied && sent.length === 1 && <p className="success" role="status"><Icon name="check" size={16} /> Message copied. Open your text thread, then press and hold in the message box and tap Paste.</p>}
             {sent.length === 1 && sent[0].ask.toName === 'everyone' && <p className="muted small">Anyone in the thread can tap the link and answer — each answer comes back with their name on it.</p>}
             {sent.length > 1 && <p className="muted small">Tap each person to text them, or copy their message to paste into a thread you already have.</p>}
@@ -230,7 +268,13 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
 }
 
 /** Shows a relative's answer and adds it to the story — with their voice recording if they sent one. */
-export function ReplySheet({ reply, audio: sentAudio, onAdded, onClose }: { reply: ReplyPayload; audio?: File; onAdded?: () => void; onClose: () => void }) {
+export function ReplySheet({ reply, audio: sentAudio, answerId, onAdded, onClose }: {
+  reply: ReplyPayload; audio?: File
+  /** The mailbox's own id for this answer — several people can answer the same link (a family thread), and each answer is kept. */
+  answerId?: string
+  onAdded?: () => void; onClose: () => void
+}) {
+  const cid = answerId ?? reply.id
   const { data, save, store } = useData()
   const ask = data.asks.find((a) => a.id === reply.id)
   const [audio, setAudio] = useState<File | null>(sentAudio ?? null)
@@ -242,7 +286,7 @@ export function ReplySheet({ reply, audio: sentAudio, onAdded, onClose }: { repl
   const fillField = ask?.target?.kind === 'person' ? ask.target.field : undefined
   const [fill, setFill] = useState(reply.text.trim().slice(0, 60))
   const [useFill, setUseFill] = useState(true)
-  const already = [...data.answers, ...data.medical, ...data.people].some((a) => a.contributions?.some((c) => c.id === reply.id))
+  const already = [...data.answers, ...data.medical, ...data.people].some((a) => a.contributions?.some((c) => c.id === cid))
   const first = reply.from.split(' ')[0]
 
   async function add() {
@@ -250,8 +294,8 @@ export function ReplySheet({ reply, audio: sentAudio, onAdded, onClose }: { repl
     const target = ask?.target
     const scope = target?.kind === 'medical' ? 'medical' : undefined
     const mediaIds = audio ? [await store.putMedia(audio, scope)] : []
-    const contribution = { id: reply.id, from: reply.from, text: text.trim(), mediaIds, addedAt: Date.now() }
-    const merge = (list?: Contribution[]) => [...(list ?? []).filter((c) => c.id !== reply.id), contribution]
+    const contribution = { id: cid, from: reply.from, text: text.trim(), mediaIds, addedAt: Date.now() }
+    const merge = (list?: Contribution[]) => [...(list ?? []).filter((c) => c.id !== cid), contribution]
 
     if (target?.kind === 'medical') {
       // Goes onto the medical item it was about (created if it doesn't exist yet, e.g. a family-history question).
@@ -317,7 +361,7 @@ export function ReplySheet({ reply, audio: sentAudio, onAdded, onClose }: { repl
               </label>
             </div>
           )}
-          <button className="btn big" disabled={busy || (!text.trim() && !audio)} onClick={add}>{busy ? 'Adding…' : 'Add to my story'}</button>
+          <button className="btn big" disabled={busy || (!text.trim() && !audio)} onClick={add}>{busy ? 'Adding…' : ask?.target?.kind === 'medical' ? 'Add to my medical binder' : ask?.target?.kind === 'person' ? 'Add to the family tree' : 'Add to my story'}</button>
           <button className="btn ghost" onClick={onClose}>Not now</button>
         </div>
       )}

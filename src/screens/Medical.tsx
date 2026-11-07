@@ -40,6 +40,7 @@ export default function Medical() {
   const { data, isOwner } = useData()
   const [editing, setEditing] = useState<MedicalItem | MedicalCategory | null>(null)
   const [asking, setAsking] = useState<{ question: string; target: NonNullable<import('../lib/types').Ask['target']>; suggestions?: Draft[] } | null>(null)
+  const [surveying, setSurveying] = useState(false)
   const items = data.medical
   const checklist = new Set(FAMILY_HISTORY.map((f) => f.title))
   const by = (c: MedicalCategory) => items.filter((i) => i.category === c && !(c === 'family' && checklist.has(i.title))).sort((a, b) => a.title.localeCompare(b.title))
@@ -95,6 +96,15 @@ export default function Medical() {
       <section className="med-section">
         <h3 className="med-label tone-violet">Family Health History</h3>
         <p className="muted small">Doctors often ask about these. Answer what you know, or ask a relative who might remember.</p>
+        {isOwner && (
+          <div className="card survey-card no-print">
+            <div>
+              <strong>Ask family all of these at once</strong>
+              <p className="muted small">Send one link with every question. They answer what they know, skip the rest, tap Send — and each answer lands right here.</p>
+            </div>
+            <button className="btn small" onClick={() => setSurveying(true)}><Icon name="share" size={16} /> Send as a survey</button>
+          </div>
+        )}
         {FAMILY_HISTORY.map((f) => {
           const item = items.find((i) => i.category === 'family' && i.title === f.title)
           const answered = item && (item.details || item.contributions?.length || item.mediaIds.length)
@@ -126,6 +136,16 @@ export default function Medical() {
 
       {editing && <MedicalSheet item={typeof editing === 'string' ? null : editing} category={typeof editing === 'string' ? editing : editing.category} onClose={() => setEditing(null)}
         onAsk={(it) => { setEditing(null); setAsking({ question: askAbout(it), suggestions: medicalDrafts(it), target: { kind: 'medical', itemId: it.id, category: it.category, title: it.title } }) }} />}
+      {surveying && (
+        <AskSheet question="" onClose={() => setSurveying(false)} survey={{
+          title: 'Family health history',
+          why: 'our family health history, so doctors and the generations after us know what runs in the family',
+          items: FAMILY_HISTORY.map((f) => {
+            const item = items.find((i) => i.category === 'family' && i.title === f.title)
+            return { label: f.title, question: f.question, target: { kind: 'medical', itemId: item?.id, category: 'family', title: f.title }, checked: !item?.details }
+          }),
+        }} />
+      )}
       {asking && <AskSheet question={asking.question} suggestions={asking.suggestions} target={asking.target} onClose={() => setAsking(null)} />}
     </div>
   )

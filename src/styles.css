@@ -491,3 +491,9 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .transcribe-player { width: 100%; max-height: 220px; border-radius: 12px; }
 .transcribe-again { display: inline-flex; align-items: center; gap: 6px; }
 .transcribe .redo { padding-top: 10px; border-top: 1px solid var(--line); }
+
+.survey-card { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.survey-card .btn { align-self: flex-start; }
+.survey-pick .check { align-items: flex-start; }
+.survey-pick .check small { font-weight: 400; }
+.survey-q + .survey-q { padding-top: 4px; }

@@ -13,6 +13,7 @@ export interface AskPayload {
   note?: string     // optional personal note from the storyteller
   reply?: string    // storyteller's number to text the answer back to
   box?: string      // storyteller's answer mailbox, so the relative can just tap Send
+  qs?: string[]     // a survey: several questions in one link (q is then the survey's title); answers go back as `${id}-${index}`
 }
 
 /** What the reply link carries back. */
@@ -71,10 +72,11 @@ export function askMessage(p: AskPayload, why?: string) {
   const from = p.from.split(' ')[0]
   return [
     `Hi ${p.to}! It’s ${from}. I’m using Simple Forever Plan — an app for keeping our family’s stories, health history and family tree together in one place, so they’re never lost and can be passed down.`,
-    `I’m working on ${why || 'my life story'}, and you may remember this better than I do:`,
-    `“${p.q}”`,
+    ...(p.qs?.length
+      ? [`I’m working on ${why || 'my life story'}, and put together ${p.qs.length} quick questions you may know more about than I do. Skip any you don’t know — even a few answers help.`]
+      : [`I’m working on ${why || 'my life story'}, and you may remember this better than I do:`, `“${p.q}”`]),
     p.note ? p.note : '',
-    `Tap here to answer — type it or just talk. No app or sign-up needed: ${askLink(p)}`,
+    `Tap here to answer — type it or just talk. No app or sign-up needed${p.qs?.length ? ', and it takes a few minutes' : ''}: ${askLink(p)}`,
   ].filter(Boolean).join('\n\n')
 }
 

@@ -3,12 +3,104 @@ import { replyMessage, smsLink, shareMessage, type AskPayload } from '../lib/ask
 import { canRecord, canTranscribe, clock, useRecorder } from '../lib/recorder'
 import { inboxAvailable, sendAnswer } from '../lib/inbox'
 import { Icon } from '../components/ui'
+import { TextField } from '../components/TextField'
 
 /**
  * What a relative sees after tapping the link in their text: one question, a way to answer by
  * typing or talking, and a button to text the answer back. No sign-up, nothing saved on their phone.
  */
 export default function AskAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
+  if (ask.qs?.length) return <SurveyAnswer ask={ask} onDone={onDone} />
+  return <OneQuestion ask={ask} onDone={onDone} />
+}
+
+/**
+ * A survey: several questions on one page. Each can be typed or said (microphone in every box) or left blank.
+ * Tap Send once and every answer goes into the storyteller's app, each in the right place.
+ */
+function SurveyAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
+  const qs = ask.qs!
+  const [name, setName] = useState(ask.to === 'everyone' ? '' : ask.to)
+  const [answers, setAnswers] = useState<string[]>(() => qs.map(() => ''))
+  const [step, setStep] = useState<'answer' | 'sent'>('answer')
+  const [sending, setSending] = useState('')
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const from = ask.from.split(' ')[0]
+  const canSend = inboxAvailable && Boolean(ask.box)
+  const count = answers.filter((a) => a.trim()).length
+  const summary = [`My answers for ${from}’s ${ask.q.toLowerCase()}:`, ...qs.flatMap((q, i) => (answers[i].trim() ? [`${q}\n${answers[i].trim()}`] : [])), `— ${name.trim()}`].join('\n\n')
+
+  async function send() {
+    setError('')
+    let done = 0
+    try {
+      for (let i = 0; i < qs.length; i++) {
+        if (!answers[i].trim()) continue
+        setSending(`Sending ${++done} of ${count}…`)
+        await sendAnswer(ask.box!, `${ask.id}-${i}`, qs[i], name.trim(), answers[i].trim())
+        // Clear what's been sent, so trying again after a dropped connection doesn't send it twice.
+        setAnswers((cur) => cur.map((a, j) => (j === i ? '' : a)))
+      }
+      setStep('sent')
+    } catch (e: any) { setError(`${e?.message ?? 'Couldn’t send.'} What’s left is still here — tap Send to try again.`) }
+    setSending('')
+  }
+
+  return (
+    <div className="welcome ask-page">
+      <div className="welcome-hero">
+        <div className="logo"><Icon name="heart" size={30} /></div>
+        <p className="eyebrow">{ask.from} is asking for your help</p>
+        <h1 className="ask-question">{ask.q}</h1>
+        <p className="ask-note">{qs.length} quick questions. Answer what you know and skip the rest — even one answer helps.</p>
+        {ask.note && <p className="ask-note">{ask.note}</p>}
+      </div>
+
+      {step === 'answer' && (
+        <div className="card stack">
+          {qs.map((q, i) => (
+            <div key={i} className="survey-q">
+              <TextField id={`survey-${i}`} multiline rows={2} label={`${i + 1}. ${q}`} value={answers[i]}
+                onChange={(v) => setAnswers((cur) => cur.map((a, j) => (j === i ? v : a)))}
+                placeholder="Type, or tap the microphone and talk. Leave blank to skip." />
+            </div>
+          ))}
+          <label className="field"><span>Your name</span>
+            <input id="ask-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+          </label>
+          {error && <p className="error">{error}</p>}
+          {canSend ? (
+            <button className="btn big" disabled={!!sending || !count || !name.trim()} onClick={send}>
+              <Icon name="share" size={20} /> {sending || (count ? `Send ${count} answer${count === 1 ? '' : 's'} to ${from}` : 'Answer at least one question')}
+            </button>
+          ) : (
+            <a className={`btn big ${count && name.trim() ? '' : 'disabled'}`} href={count && name.trim() ? smsLink(ask.reply ?? '', summary) : undefined}
+              onClick={() => count && name.trim() && setTimeout(() => setStep('sent'), 800)}>
+              <Icon name="share" size={20} /> Text my answers to {from}
+            </a>
+          )}
+          {count > 0 && name.trim() && (
+            <button className="link-btn" onClick={async () => { try { await navigator.clipboard.writeText(summary); setCopied(true) } catch { /* ignore */ } }}>
+              {copied ? 'Copied — paste it into a message' : 'Or copy my answers'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {step === 'sent' && (
+        <div className="card stack center-text">
+          <Icon name="heart" size={34} />
+          <h2>Thank you, {name.trim()}.</h2>
+          <p className="muted">{canSend ? `Your answers are on their way to ${from}, with your name on them.` : `Once ${from} gets your message, your answers become part of the family record.`}</p>
+          <button className="link-btn" onClick={onDone}>Start a story of my own</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OneQuestion({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
   // A question pasted into a family thread goes to “everyone” — each person types their own name.
   const [name, setName] = useState(ask.to === 'everyone' ? '' : ask.to)
   const [text, setText] = useState('')

@@ -32,6 +32,8 @@ export interface Ask {
   /** For anything else: a medical item or family-history question, or a person on the tree. */
   target?: { kind: 'medical'; itemId?: ID; category: MedicalCategory; title: string } | { kind: 'person'; personId: ID; field?: 'born' | 'died' }
   question: string
+  /** Set when this question went out as part of a survey (one link, several questions). */
+  surveyId?: ID
   toName: string
   toPhone: string
   note?: string

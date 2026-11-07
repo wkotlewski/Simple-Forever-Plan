@@ -17,8 +17,11 @@ export interface ComposeResult {
   note?: string
 }
 
-/** The writer is available once Supabase is connected (it checks the storyteller's private key). */
-export const writerAvailable = supabaseConfigured
+/**
+ * The built-in writer (needs the `story` function and an AI key in Supabase). Off for now: people use their
+ * own AI app through "Write it with your AI app". Set VITE_ENABLE_WRITER=true to switch it on.
+ */
+export const writerAvailable = supabaseConfigured && import.meta.env.VITE_ENABLE_WRITER === 'true'
 
 const creds = (s: Settings) => (s.inboxId && s.inboxKey ? { inbox: s.inboxId, secret: s.inboxKey } : {})
 

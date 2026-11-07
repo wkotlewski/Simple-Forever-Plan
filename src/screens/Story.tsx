@@ -4,6 +4,7 @@ import { CHAPTERS, chapterById } from '../lib/questions'
 import { composeChapter, correctionsFrom, writerAvailable } from '../lib/compose'
 import { ensureInbox } from '../lib/inbox'
 import Summary from './Summary'
+import { AiShare } from '../components/AiShare'
 import { mediaKind } from '../lib/store'
 import type { Answer, ChapterStory } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader } from '../components/ui'
@@ -193,8 +194,14 @@ function ChapterView({ id, onBack, onAnswer }: { id: string; onBack: () => void;
         </section>
       )}
 
+      {isOwner && answers.length > 0 && !editing && !writerAvailable && (
+        <AiShare kind="chapter" chapterId={id} resultLabel="Your chapter, from your AI app" onResult={(text) => {
+          setBody(text); setEditing(true)
+          setNote('Pasted from your AI app. Read it through and fix anything that isn’t right — nothing is saved until you tap Save. Your answers aren’t changed.')
+        }} />
+      )}
       {isOwner && answers.length > 0 && !editing && (
-        <button className="btn wide" disabled={busy} onClick={write}><Icon name="sparkle" size={20} /> {busy ? 'Writing your chapter…' : story ? 'Rewrite from my answers' : 'Turn my answers into a chapter'}</button>
+        <button className={writerAvailable ? 'btn wide' : 'btn ghost wide'} disabled={busy} onClick={write}><Icon name="sparkle" size={20} /> {busy ? 'Writing your chapter…' : writerAvailable ? (story ? 'Rewrite from my answers' : 'Turn my answers into a chapter') : 'Put my answers in order as a chapter'}</button>
       )}
 
       {answers.length > 0 && <Recordings answers={answers} />}

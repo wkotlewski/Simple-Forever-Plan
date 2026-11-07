@@ -138,6 +138,9 @@ export interface Settings {
   inboxKey?: string
   /** Suggestions from stories the storyteller chose not to add. */
   dismissed?: string[]
+  /** When a full backup was last saved, and until when the reminder is snoozed. */
+  lastBackupAt?: number
+  backupSnoozedUntil?: number
 }
 
 /** "Your story so far": what the writer understood, checked by the storyteller. */

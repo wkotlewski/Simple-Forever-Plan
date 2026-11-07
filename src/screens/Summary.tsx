@@ -6,6 +6,7 @@ import { CHAPTERS } from '../lib/questions'
 import type { LifeSummary } from '../lib/types'
 import { Icon, ScreenHeader } from '../components/ui'
 import { TextField } from '../components/TextField'
+import { AiShare } from '../components/AiShare'
 import { ReadAloud } from './Story'
 
 const norm = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim()
@@ -75,11 +76,19 @@ export default function Summary({ onBack }: { onBack: () => void }) {
       <ScreenHeader title="Your Story So Far" sub="Your life as one story — and a chance to check what was understood." onBack={onBack} />
 
       {!writerAvailable ? (
-        <section className="card stack">
-          <h3>The story writer isn’t connected yet</h3>
-          <p className="muted">Once it is, this page shows a warm overview of your life — clear and smooth like a eulogy, built only from what you and your family shared — plus a list of every fact it understood so you can confirm or fix each one.</p>
-          <p className="muted small">So far you’ve shared {shared} answer{shared === 1 ? '' : 's'} across {chapters.length} chapter{chapters.length === 1 ? '' : 's'}. Everything you’ve shared will be used.</p>
-        </section>
+        <>
+          {summary?.overview && (
+            <section className="card story-card">
+              <div className="prose">{summary.overview.split(/\n{2,}/).map((p, i) => <p key={i}>{p}</p>)}</div>
+              <div className="row wrap"><ReadAloud text={summary.overview} /></div>
+              <p className="muted small">Saved {new Date(summary.updatedAt).toLocaleDateString()}. {stale ? 'You’ve shared more since then — you can make a new one below.' : ''}</p>
+            </section>
+          )}
+          <p className="muted small">So far you’ve shared {shared} answer{shared === 1 ? '' : 's'} across {chapters.length} chapter{chapters.length === 1 ? '' : 's'}. All of it is included.</p>
+          <AiShare kind="story" resultLabel="Your story so far, from your AI app" onResult={async (text) => {
+            await save('insights', { id: 'summary', overview: text, facts: summary?.facts ?? [], unclear: summary?.unclear ?? [], basedOn: shared, updatedAt: Date.now() })
+          }} />
+        </>
       ) : !summary ? (
         <section className="card stack">
           <p>You’ve shared {shared} answer{shared === 1 ? '' : 's'} across {chapters.length} chapter{chapters.length === 1 ? '' : 's'}. The writer will read all of it and tell you how your life story reads so far.</p>

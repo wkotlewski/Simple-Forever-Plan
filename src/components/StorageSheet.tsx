@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useData } from '../lib/data'
 import { makeBackup, makeSpreadsheet, restoreBackup, saveToApp } from '../lib/backup'
+import { makePdf, planSections } from '../lib/export'
 import { driveConfigured } from '../lib/google'
 import { connectAndOpenDrive } from '../lib/openDrive'
 import type { Access } from '../lib/auth'
@@ -13,7 +14,7 @@ export default function StorageSheet({ onClose, onSwitch, onDisconnect }: {
   onSwitch: (a: Access) => void
   onDisconnect: () => void
 }) {
-  const { store, data, isOwner, session } = useData()
+  const { store, data, isOwner, session, settings, save } = useData()
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
@@ -58,16 +59,26 @@ export default function StorageSheet({ onClose, onSwitch, onDisconnect }: {
         </div>
 
         <section className="card inset stack">
-          <h3>Save a copy</h3>
-          <p className="muted small">You choose where it goes: Files, iCloud Drive, Google Drive, Dropbox, email, or any app that keeps files.</p>
+          <h3>Back up everything</h3>
+          <p className="muted small">One ZIP file with every story, recording, photo, your family tree and Words to Keep, plus a PDF anyone can read. Keep it in iCloud Drive, Google Drive, Dropbox or email — then a cleared browser or a new phone never costs you anything.</p>
           <label className="check"><input id="copy-media" type="checkbox" checked={withMedia} onChange={(e) => setWithMedia(e.target.checked)} /> Include recordings, videos and photos</label>
           {session.canViewMedical && (
             <label className="check"><input id="copy-medical" type="checkbox" checked={withMedical} onChange={(e) => setWithMedical(e.target.checked)} /> Include medical information</label>
           )}
           <button className="btn" disabled={busy} onClick={() => run(async () => {
-            const file = await makeBackup(store, visible, withMedia, setStatus)
-            return result(await saveToApp(file), 'Copy')
-          })}><Icon name="upload" size={18} /> Save a full copy</button>
+            setStatus('Making a readable PDF…')
+            const name = settings.storytellerName || session.name
+            const pdf = await makePdf(`The Story of ${name}`, planSections(visible, name, { medical: withMedical }))
+            const file = await makeBackup(store, visible, withMedia, setStatus, pdf)
+            const r = await saveToApp(file)
+            if (r !== 'cancelled' && isOwner) await save('settings', { ...settings, lastBackupAt: Date.now() })
+            return result(r, 'Backup')
+          })}><Icon name="upload" size={18} /> Save a full backup (ZIP)</button>
+          <button className="btn secondary" disabled={busy} onClick={() => run(async () => {
+            const name = settings.storytellerName || session.name
+            const pdf = await makePdf(`The Story of ${name}`, planSections(visible, name, { medical: withMedical }))
+            return result(await saveToApp(new File([pdf], `The Story of ${name}.pdf`, { type: 'application/pdf' })), 'PDF')
+          })}><Icon name="book" size={18} /> Save as a PDF to read or print</button>
           <button className="btn secondary" disabled={busy} onClick={() => run(async () => result(await saveToApp(makeSpreadsheet(visible, withMedical)), 'Spreadsheet'))}>
             <Icon name="type" size={18} /> Save as a spreadsheet
           </button>
@@ -77,10 +88,10 @@ export default function StorageSheet({ onClose, onSwitch, onDisconnect }: {
         {isOwner && (
           <section className="card inset stack">
             <h3>Restore from a copy</h3>
-            <p className="muted small">Bring back a full copy you saved earlier, on this phone or a new one.</p>
-            <FileButton label="Choose a saved copy" accept="application/json,.json" onFile={(f) => run(async () => {
+            <p className="muted small">Bring back a backup you saved earlier, on this phone or a new one. It adds to what’s here — nothing already in the app is removed.</p>
+            <FileButton label="Choose a saved backup" accept=".zip,application/zip,application/json,.json" onFile={(f) => run(async () => {
               const n = await restoreBackup(f, store, setStatus)
-              setTimeout(() => window.location.reload(), 900)
+              setTimeout(() => window.location.reload(), 1200)
               return `Restored ${n} items.`
             })} />
           </section>

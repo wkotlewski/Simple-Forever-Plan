@@ -13,6 +13,7 @@ export interface AskPayload {
   note?: string     // optional personal note from the storyteller
   reply?: string    // storyteller's number to text the answer back to
   box?: string      // storyteller's answer mailbox, so the relative can just tap Send
+  more?: 'health'   // after answering, they can keep going with the other family health history questions
   qs?: string[]     // a survey: several questions in one link (q is then the survey's title); answers go back as `${id}-${index}`
 }
 

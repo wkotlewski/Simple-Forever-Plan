@@ -7,6 +7,7 @@ import { Icon } from './components/ui'
 import { clearHash, readHash, type ReplyPayload } from './lib/ask'
 import { ReplySheet } from './components/AskSheet'
 import AskAnswer from './screens/AskAnswer'
+import { extraHistory } from './lib/familyHistory'
 import { clearAnswers, inboxAvailable, readInbox, type InboxAnswer } from './lib/inbox'
 import Welcome from './screens/Welcome'
 import Home from './screens/Home'
@@ -127,7 +128,8 @@ function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: A
     return () => { document.removeEventListener('visibilitychange', onVisible); window.clearInterval(timer) }
   }, [loading, isOwner, settings.inboxId, settings.inboxKey]) // eslint-disable-line react-hooks/exhaustive-deps
   // Answers to requests that were removed are cleared from the mailbox instead of shown.
-  const known = new Set(data.asks.map((a) => a.id))
+  const asked = new Set(data.asks.map((a) => a.id))
+  const known = { has: (id: string) => asked.has(extraHistory(id)?.baseId ?? id) }
   const orphans = inbox.filter((a) => !known.has(a.askId))
   useEffect(() => {
     if (!orphans.length || loading) return

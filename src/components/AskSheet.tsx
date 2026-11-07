@@ -4,6 +4,7 @@ import { useData } from '../lib/data'
 import { askMessage, findReply, shareMessage, smsLink, type ReplyPayload } from '../lib/ask'
 import { uid } from '../lib/store'
 import { CHAPTERS } from '../lib/questions'
+import { extraHistory } from '../lib/familyHistory'
 import type { Ask, Contribution } from '../lib/types'
 import type { Draft } from '../lib/drafts'
 import { Icon, Media, Sheet } from './ui'
@@ -110,7 +111,8 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
       return { ask: asks[0], asks, message: askMessage({ v: 1, id: surveyId, q: survey.title, qs: chosen.map((it) => it.question), ...common }, why), texted: false }
     }
     const ask: Ask = { id: uid(), chapterId, questionId, target: askTarget, question: q.trim(), ...base }
-    return { ask, asks: [ask], message: askMessage({ v: 1, id: ask.id, q: ask.question, ...common }, why), texted: false }
+    const more = askTarget?.kind === 'medical' && askTarget.category === 'family' ? 'health' as const : undefined
+    return { ask, asks: [ask], message: askMessage({ v: 1, id: ask.id, q: ask.question, ...common, more }, why), texted: false }
   }
 
   async function prepare(list = filled.map(makeOne)) {
@@ -276,7 +278,12 @@ export function ReplySheet({ reply, audio: sentAudio, answerId, onAdded, onClose
 }) {
   const cid = answerId ?? reply.id
   const { data, save, store } = useData()
-  const ask = data.asks.find((a) => a.id === reply.id)
+  const extra = extraHistory(reply.id)
+  const base = data.asks.find((a) => a.id === (extra?.baseId ?? reply.id))
+  // An extra health-history answer the relative chose to add rides on the request they were sent.
+  const ask: Ask | undefined = extra && base
+    ? { ...base, id: reply.id, question: extra.question, target: { kind: 'medical', category: 'family', title: extra.title } }
+    : base
   const [audio, setAudio] = useState<File | null>(sentAudio ?? null)
   const sentUrl = useMemo(() => (sentAudio ? URL.createObjectURL(sentAudio) : ''), [sentAudio])
   const [text, setText] = useState(reply.text)
@@ -319,7 +326,11 @@ export function ReplySheet({ reply, audio: sentAudio, answerId, onAdded, onClose
         contributions: merge(existing?.contributions),
       })
     }
-    if (ask) await save('asks', { ...ask, answeredAt: Date.now() })
+    if (base) {
+      await save('asks', { ...base, answeredAt: base.answeredAt ?? Date.now() })
+      // One answer back from a survey means that person has answered it — the other questions stop showing as waiting.
+      if (base.surveyId) for (const s of data.asks.filter((x) => x.surveyId === base.surveyId && !x.answeredAt && x.id !== base.id)) await save('asks', { ...s, answeredAt: Date.now() })
+    }
     onAdded?.()
     setBusy(false)
     setDone(true)
@@ -434,7 +445,8 @@ type Ctx = { data: ReturnType<typeof useData>['data']; save: ReturnType<typeof u
 
 /** Takes answers out of wherever they were added (story, medical binder, family tree). Story entries that held nothing else go too. */
 export async function removeContributions(match: Set<string>, { data, save, remove }: Ctx, askIds: Set<string> = new Set()) {
-  const gone = (c: Contribution) => match.has(c.id) || (!!c.askId && askIds.has(c.askId)) || askIds.has(c.id)
+  const baseOf = (id: string) => extraHistory(id)?.baseId ?? id
+  const gone = (c: Contribution) => match.has(c.id) || (!!c.askId && askIds.has(baseOf(c.askId))) || askIds.has(baseOf(c.id))
   for (const a of data.answers) {
     if (!a.contributions?.some(gone)) continue
     const left = a.contributions.filter((c) => !gone(c))
@@ -466,7 +478,8 @@ export function RequestsSheet({ onClose }: { onClose: () => void }) {
   }, [data.asks])
   const answersFor = (asks: Ask[]) => {
     const ids = new Set(asks.map((a) => a.id))
-    return [...data.answers, ...data.medical, ...data.people].flatMap((x) => x.contributions ?? []).filter((c) => ids.has(c.id) || (c.askId && ids.has(c.askId))).length
+    const baseOf = (id: string) => extraHistory(id)?.baseId ?? id
+    return [...data.answers, ...data.medical, ...data.people].flatMap((x) => x.contributions ?? []).filter((c) => ids.has(baseOf(c.id)) || (c.askId && ids.has(baseOf(c.askId)))).length
   }
   return (
     <Sheet title="Requests sent to family" onClose={onClose}>

@@ -7,6 +7,7 @@ import { Empty, FileButton, Icon, Media, ScreenHeader, Sheet } from '../componen
 import { TextField } from '../components/TextField'
 import { ItemDocs, SummarizeSheet } from '../components/DocSummary'
 import { listDocuments, type DocRef } from '../lib/docSummary'
+import { FAMILY_HISTORY } from '../lib/familyHistory'
 import { AskSheet, Contributions, Waiting } from '../components/AskSheet'
 import { medicalDrafts, type Draft } from '../lib/drafts'
 
@@ -22,17 +23,6 @@ export const MED_CATS: Record<MedicalCategory, { label: string; one: string; hin
 }
 const ORDER: MedicalCategory[] = ['allergy', 'medication', 'condition', 'doctor', 'history', 'insurance', 'wishes', 'family']
 
-/** What doctors usually ask about family health history. Each can be answered here or asked of a relative. */
-const FAMILY_HISTORY: { title: string; question: string }[] = [
-  { title: 'Heart disease', question: 'Has anyone in our family had heart disease, a heart attack, or heart surgery? Who, and about what age?' },
-  { title: 'High blood pressure or cholesterol', question: 'Who in our family has had high blood pressure or high cholesterol?' },
-  { title: 'Stroke', question: 'Has anyone in our family had a stroke? Who, and about what age?' },
-  { title: 'Diabetes', question: 'Has anyone in our family had diabetes? Who, and what type if you know?' },
-  { title: 'Cancer', question: 'Has anyone in our family had cancer? What kind, who, and about what age?' },
-  { title: 'Memory loss or Alzheimer’s', question: 'Has anyone in our family had Alzheimer’s, dementia, or memory problems as they got older?' },
-  { title: 'Mental health', question: 'Has anyone in our family lived with depression, anxiety, or another mental health condition?' },
-  { title: 'Anything else that runs in the family', question: 'Are there any other health conditions doctors said run in our family?' },
-]
 const askAbout = (i: Pick<MedicalItem, 'category' | 'title'>) =>
   i.category === 'family'
     ? FAMILY_HISTORY.find((f) => f.title === i.title)?.question ?? `What do you know about ${i.title.toLowerCase()} in our family?`
@@ -51,7 +41,7 @@ export default function Medical() {
   const checklist = new Set(FAMILY_HISTORY.map((f) => f.title))
   const by = (c: MedicalCategory) => items.filter((i) => i.category === c && !(c === 'family' && checklist.has(i.title))).sort((a, b) => a.title.localeCompare(b.title))
   const waitingFor = (i: Pick<MedicalItem, 'category' | 'title'> & { id?: string }) =>
-    data.asks.filter((a) => !a.answeredAt && a.target?.kind === 'medical' && (a.target.itemId === i.id || (a.target.category === i.category && a.target.title === i.title)))
+    data.asks.filter((a) => !a.answeredAt && !a.surveyId && a.target?.kind === 'medical' && (a.target.itemId === i.id || (a.target.category === i.category && a.target.title === i.title)))
 
   return (
     <div className="screen">
@@ -118,6 +108,19 @@ export default function Medical() {
             <div>
               <strong>Ask family all of these at once</strong>
               <p className="muted small">Send one link with every question. They answer what they know, skip the rest, tap Send — and each answer lands right here.</p>
+              {(() => {
+                // One line per person the survey went to, instead of "waiting" on every question.
+                const sent = new Map<string, { name: string; done: boolean }>()
+                for (const a of data.asks.filter((x) => x.surveyId)) {
+                  const cur = sent.get(a.surveyId!)
+                  sent.set(a.surveyId!, { name: a.toName === 'everyone' ? 'your family thread' : a.toName, done: (cur?.done ?? false) || !!a.answeredAt })
+                }
+                const list = [...sent.values()]
+                if (!list.length) return null
+                const waiting = list.filter((x) => !x.done).map((x) => x.name)
+                const done = list.filter((x) => x.done).map((x) => x.name)
+                return <p className="small survey-status">{[done.length ? `Answered: ${done.join(', ')}` : '', waiting.length ? `Waiting on: ${waiting.join(', ')}` : ''].filter(Boolean).join(' · ')}</p>
+              })()}
             </div>
             <button className="btn small" onClick={() => setSurveying(true)}><Icon name="share" size={16} /> Send as a survey</button>
           </div>

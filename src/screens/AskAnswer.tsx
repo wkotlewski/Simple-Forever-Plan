@@ -4,6 +4,7 @@ import { canRecord, canTranscribe, clock, useRecorder } from '../lib/recorder'
 import { inboxAvailable, sendAnswer } from '../lib/inbox'
 import { Icon } from '../components/ui'
 import { TextField } from '../components/TextField'
+import { FAMILY_HISTORY } from '../lib/familyHistory'
 
 /**
  * What a relative sees after tapping the link in their text: one question, a way to answer by
@@ -91,7 +92,7 @@ function SurveyAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) 
           {error && <p className="error">{error}</p>}
           {canSend ? (
             <button className="btn big" disabled={!!sending || !count || !name.trim()} onClick={send}>
-              <Icon name="share" size={20} /> {sending || (count ? `Send ${count} answer${count === 1 ? '' : 's'} to ${from}` : 'Answer at least one question')}
+              <Icon name="share" size={20} /> {sending || (count ? `Finish and send ${count} answer${count === 1 ? '' : 's'} to ${from}` : 'Answer at least one question')}
             </button>
           ) : (
             <a className={`btn big ${count && name.trim() ? '' : 'disabled'}`} href={count && name.trim() ? smsLink(ask.reply ?? '', summary) : undefined}
@@ -112,6 +113,8 @@ function SurveyAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) 
           <Icon name="heart" size={34} />
           <h2>Thank you, {name.trim()}.</h2>
           <p className="muted">{canSend ? `Your answers are on their way to ${from}, with your name on them.` : `Once ${from} gets your message, your answers become part of the family record.`}</p>
+          {canSend && <button className="btn secondary" onClick={() => setStep('answer')}>Remembered more? Add to your answers</button>}
+          {canSend && <p className="muted small">You can open this same link again any time to send more.</p>}
           <button className="link-btn" onClick={onDone}>Start a story of my own</button>
         </div>
       )}
@@ -131,6 +134,13 @@ function OneQuestion({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const canSend = inboxAvailable && Boolean(ask.box)
+  // For family health history: the other questions, so they can keep going in one visit.
+  const others = ask.more === 'health' && canSend ? FAMILY_HISTORY.map((f, i) => ({ ...f, i })).filter((f) => f.question !== ask.q) : []
+  const [showMore, setShowMore] = useState(false)
+  const [extra, setExtra] = useState<Record<number, string>>({})
+  const [sentMain, setSentMain] = useState(false)
+  const extraCount = Object.values(extra).filter((v) => v.trim()).length
+  const hasMain = !!(text.trim() || audio)
   const rec = useRecorder()
   const from = ask.from.split(' ')[0]
 
@@ -163,6 +173,8 @@ function OneQuestion({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
         <div className="card stack">
           <p className="muted">Share whatever you remember — a few words or a long story. {canRecord ? 'You can type, or tap Talk and just say it.' : ''}</p>
 
+          {sentMain ? <p className="success"><Icon name="check" size={16} /> Your answer to this question was sent.</p> : (
+            <>
           {rec.state === 'recording' ? (
             <div className="recording">
               <span><span className="rec-dot" /> Recording {clock(rec.seconds)}</span>
@@ -183,19 +195,47 @@ function OneQuestion({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
               </label>
             </>
           )}
+            </>
+          )}
           {rec.error && <p className="error">{rec.error}</p>}
+
+          {others.length > 0 && (
+            <div className="more-history stack">
+              {!showMore ? (
+                <button className="btn ghost" onClick={() => setShowMore(true)}><Icon name="plus" size={18} /> Know about other health conditions in the family? Add them too</button>
+              ) : (
+                <>
+                  <p className="label">More family health history <small className="muted">— optional, skip any you don’t know</small></p>
+                  {others.map((f) => (
+                    <TextField key={f.i} id={`more-${f.i}`} multiline rows={2} label={f.question} value={extra[f.i] ?? ''}
+                      onChange={(v) => setExtra((cur) => ({ ...cur, [f.i]: v }))} placeholder="Type, or tap the microphone and talk." />
+                  ))}
+                </>
+              )}
+            </div>
+          )}
 
           <label className="field"><span>Your name</span>
             <input id="ask-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
           </label>
           {sendError && <p className="error">{sendError}</p>}
           {canSend ? (
-            <button className="btn big" disabled={sending || rec.state === 'recording' || (!text.trim() && !audio) || !name.trim()} onClick={async () => {
+            <button className="btn big" disabled={sending || rec.state === 'recording' || ((!hasMain || sentMain) && !extraCount) || !name.trim()} onClick={async () => {
               setSending(true); setSendError('')
-              try { await sendAnswer(ask.box!, ask.id, ask.q, name.trim(), text.trim(), audio); setStep('sent') }
-              catch (e: any) { setSendError(`${e?.message ?? 'Couldn’t send.'} You can also text it instead.`) }
+              try {
+                if (hasMain && !sentMain) { await sendAnswer(ask.box!, ask.id, ask.q, name.trim(), text.trim(), audio); setSentMain(true) }
+                for (const f of others) {
+                  const v = extra[f.i]?.trim()
+                  if (!v) continue
+                  await sendAnswer(ask.box!, `${ask.id}~${f.i}`, f.question, name.trim(), v)
+                  // Clear what's sent, so trying again after a dropped connection doesn't send it twice.
+                  setExtra((cur) => ({ ...cur, [f.i]: '' }))
+                }
+                setStep('sent')
+              }
+              catch (e: any) { setSendError(`${e?.message ?? 'Couldn’t send.'} What’s left is still here — tap to try again.`) }
               setSending(false)
-            }}><Icon name="share" size={20} /> {sending ? 'Sending…' : `Send to ${from}`}</button>
+            }}><Icon name="share" size={20} /> {sending ? 'Sending…' : others.length ? `Finish and send to ${from}` : `Send to ${from}`}</button>
           ) : null}
           <button className={canSend ? 'link-btn' : 'btn big'} disabled={rec.state === 'recording' || (!text.trim() && !audio) || !name.trim()} onClick={() => setStep('send')}>
             {canSend ? 'Or send it by text message' : `Next: send it to ${from}`}
@@ -236,6 +276,10 @@ function OneQuestion({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
           <h2>Thank you, {name.trim()}.</h2>
           <p className="muted">{canSend ? `It’s on its way. Next time ${from} opens the app, your memory becomes part of their story — with your name on it.` : `Once ${from} opens your message, your memory becomes part of their story — with your name on it.`}</p>
           {!canSend && <button className="btn ghost" onClick={() => setStep('send')}>Didn’t send? Try again</button>}
+          {others.length > 0 && (
+            <button className="btn secondary" onClick={() => { setShowMore(true); setStep('answer') }}>Add more family health history</button>
+          )}
+          {canSend && <p className="muted small">You can open this same link again any time to send more.</p>}
           <button className="link-btn" onClick={onDone}>Start a story of my own</button>
         </div>
       )}

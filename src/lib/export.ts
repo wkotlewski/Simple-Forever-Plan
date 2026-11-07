@@ -50,7 +50,7 @@ export function planSections(data: Data, name: string, opts: { medical: boolean;
   if (data.messages.length) {
     out.push({
       heading: 'Words to Keep', paragraphs: data.messages.map((m) =>
-        [`${m.kind[0].toUpperCase()}${m.kind.slice(1)}${m.forWhom ? ` — for ${m.forWhom}` : ''}: ${m.text}`, m.source ? `— ${m.source}` : '', m.note ?? '', `Open when: ${m.occasions.join(', ')}`].filter(Boolean).join('\n')),
+        [`${m.kind[0].toUpperCase()}${m.kind.slice(1)}${m.forWhom ? ` — for ${m.forWhom}` : ''}: ${m.text}`, m.source ? `— ${m.source}` : '', m.note ?? '', m.link ? `Listen: ${m.link}` : '', `Open when: ${m.occasions.join(', ')}`].filter(Boolean).join('\n')),
     })
   }
   if (opts.medical && data.medical.length) {

@@ -130,6 +130,8 @@ export interface KeepsakeMessage {
   forWhom?: string
   /** Why it mattered — often the sentence from the story where it came up. */
   note?: string
+  /** For songs: a YouTube, Spotify or Apple Music link so family can listen. */
+  link?: string
   occasions: string[]
   mediaIds: ID[]
   createdAt: number

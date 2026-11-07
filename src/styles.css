@@ -533,3 +533,19 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .icon-btn.small { width: 28px; height: 28px; font-size: 13px; }
 .waiting .link-btn { margin-left: 8px; }
 .request-row strong { font-weight: 600; }
+
+/* Songs */
+.song-player { margin-top: 4px; }
+.song-embed { width: 100%; border: 0; border-radius: 12px; background: #000; }
+.song-embed.video { aspect-ratio: 16 / 9; }
+.song-embed.spotify { height: 152px; background: transparent; }
+.song-embed.spotify.tall { height: 352px; }
+.song-embed.apple { height: 175px; background: transparent; }
+
+/* Scripture & quote lookups */
+.lookup-hint { margin-top: -6px; }
+.lookup .chips.small .chip { padding: 4px 10px; font-size: 13px; }
+.lookup-verse { font-family: var(--serif); font-size: 17px; line-height: 1.5; margin: 0; }
+.lookup-verse small { font-family: inherit; display: block; margin-top: 4px; font-size: 14px; }
+.lookup-option { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card, transparent); color: inherit; font: inherit; cursor: pointer; }
+.lookup-option span { color: var(--ink-soft); font-size: 15px; }

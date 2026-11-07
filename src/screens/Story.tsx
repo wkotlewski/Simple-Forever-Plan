@@ -6,7 +6,7 @@ import { ensureInbox } from '../lib/inbox'
 import Summary from './Summary'
 import { AiShare } from '../components/AiShare'
 import { LostRecordings } from '../components/LostRecordings'
-import { Transcribe } from '../components/Transcribe'
+import { MissingWords, Transcribe } from '../components/Transcribe'
 import { ItemDocs, SummarizeSheet } from '../components/DocSummary'
 import { listDocuments, type DocRef } from '../lib/docSummary'
 import { mediaKind } from '../lib/store'
@@ -40,6 +40,7 @@ function ChapterList({ open, onBook, onSummary }: { open: (id: string, interview
       <ScreenHeader title={isOwner ? 'My Story' : `${settings.storytellerName.split(' ')[0] || 'Their'}'s Story`}
         sub={isOwner ? 'Answer questions by talking, video, or writing. Each chapter becomes part of your book.' : 'Chapters of a life, shared with you.'} />
 
+      <MissingWords />
       {isOwner && (
         <div className="segmented" role="radiogroup" aria-label="How chapters are written">
           <span>Write my chapters</span>

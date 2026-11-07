@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { useData } from '../lib/data'
 import { docxText, parseFamilyText, parseGedcom, TREE_PICTURE_PROMPT, type FamilyDraft } from '../lib/familyParse'
 import { applyFamilyDraft, type DraftChoices } from '../lib/familyApply'
-import { transcribeBlob } from '../lib/transcribe'
 import { TextField } from './TextField'
 import { FileButton, Icon, Sheet } from './ui'
 
@@ -13,6 +12,11 @@ const EXAMPLE = 'My parents were Stanley and Helen Kowalski. I have a brother na
  * a family tree file (from Ancestry, FamilySearch…), a Word document, or — with an AI app's help — a picture.
  * Everything is shown for checking before it's added.
  */
+const RECORDING_PROMPT = `Please write out the attached recording word for word. It's me describing my family — names, who is married to whom, children, and years.
+
+- Write only the words that are spoken — no summary or comments.
+- Spell names as carefully as you can. If a word is hard to make out, write [unclear].`
+
 export function BulkFamily({ onClose }: { onClose: () => void }) {
   const { data, save, settings, session } = useData()
   const selfName = settings.storytellerName || session.name
@@ -23,7 +27,9 @@ export function BulkFamily({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [picture, setPicture] = useState(false)
+  // A picture or recording that needs the person's AI app to turn it into words.
+  const [aiFile, setAiFile] = useState<{ file: File; kind: 'picture' | 'recording' } | null>(null)
+  const [aiNote, setAiNote] = useState('')
   const [copied, setCopied] = useState(false)
 
   function review(d: FamilyDraft) {
@@ -41,7 +47,7 @@ export function BulkFamily({ onClose }: { onClose: () => void }) {
   }
 
   async function openFile(f: File) {
-    setError(''); setStatus(''); setPicture(false)
+    setError(''); setStatus(''); setAiFile(null); setAiNote('')
     const n = f.name.toLowerCase()
     try {
       if (n.endsWith('.ged')) { review(parseGedcom(await f.text(), ctx)); return }
@@ -57,14 +63,8 @@ export function BulkFamily({ onClose }: { onClose: () => void }) {
         setStatus('Text brought in. Check it, then tap Read my family.')
         return
       }
-      if (f.type.startsWith('audio/') || f.type.startsWith('video/')) {
-        setBusy(true)
-        const words = await transcribeBlob(f, (p) => setStatus(p.stage === 'downloading' ? `Getting the speech tool ready — first time only (${p.percent}%)` : p.stage === 'working' ? `Writing out your recording… ${p.pieces > 1 ? `part ${p.piece} of ${p.pieces}` : ''}` : 'Opening the recording…'))
-        setText((t) => [t, words].filter(Boolean).join('\n'))
-        setStatus('Here’s what you said. Fix any names, then tap Read my family.')
-        return
-      }
-      if (f.type.startsWith('image/') || n.endsWith('.pdf')) { setPicture(true); return }
+      if (f.type.startsWith('audio/') || f.type.startsWith('video/')) { setAiFile({ file: f, kind: 'recording' }); return }
+      if (f.type.startsWith('image/') || n.endsWith('.pdf')) { setAiFile({ file: f, kind: 'picture' }); return }
       setError('That kind of file can’t be read here. Try a family tree file (.ged), a Word document, or a recording.')
     } catch (e: any) {
       setError(e?.message ?? 'That file couldn’t be read.')
@@ -112,13 +112,26 @@ export function BulkFamily({ onClose }: { onClose: () => void }) {
           <p className="muted small">Family tree files (.ged) come from Ancestry, FamilySearch, MyHeritage and most family tree apps — look for “Export” or “Download GEDCOM”.</p>
         </div>
 
-        {picture && (
+        {aiFile && (
           <div className="card inset stack">
-            <h3>Reading a picture of a tree</h3>
-            <p className="small">Pictures need your AI app’s help. Copy these instructions, open ChatGPT, Claude or Gemini, attach your picture, paste, and send. Then paste what it writes back into the box above and tap <strong>Read my family</strong>.</p>
-            <button className="btn secondary small" onClick={async () => {
-              try { await navigator.clipboard.writeText(TREE_PICTURE_PROMPT); setCopied(true) } catch { setCopied(false) }
-            }}><Icon name={copied ? 'check' : 'type'} size={16} /> {copied ? 'Copied' : 'Copy instructions for my AI app'}</button>
+            <h3>{aiFile.kind === 'picture' ? 'Reading a picture of a tree' : 'Writing out your recording'}</h3>
+            <p className="small">This needs your AI app’s help (ChatGPT, Gemini, Claude…). Send it with the instructions, then copy what it writes, paste it into the box above, and tap <strong>Read my family</strong>.</p>
+            <div className="row wrap">
+              <button className="btn small" onClick={async () => {
+                const prompt = aiFile.kind === 'picture' ? TREE_PICTURE_PROMPT : RECORDING_PROMPT
+                navigator.clipboard?.writeText(prompt).catch(() => null)
+                const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
+                if (nav.share && nav.canShare?.({ files: [aiFile.file], text: prompt })) {
+                  try { await nav.share({ files: [aiFile.file], text: prompt }); setAiNote('Sent. If the instructions didn’t come through, paste them — they’re copied.'); return }
+                  catch (e: any) { if (e?.name === 'AbortError') return }
+                }
+                setAiNote('Instructions copied. Open your AI app, attach the file, paste, and send.')
+              }}><Icon name="share" size={16} /> Send to my AI app</button>
+              <button className="btn ghost small" onClick={async () => {
+                try { await navigator.clipboard.writeText(aiFile.kind === 'picture' ? TREE_PICTURE_PROMPT : RECORDING_PROMPT); setCopied(true) } catch { setCopied(false) }
+              }}><Icon name={copied ? 'check' : 'type'} size={16} /> {copied ? 'Copied' : 'Copy instructions'}</button>
+            </div>
+            {aiNote && <p className="muted small">{aiNote}</p>}
           </div>
         )}
       </div>

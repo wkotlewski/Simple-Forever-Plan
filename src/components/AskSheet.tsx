@@ -95,7 +95,9 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
 
   // What the answer is for, said in the text so family know why they're being asked.
   const aboutPerson = askTarget?.kind === 'person' ? data.people.find((p) => p.id === askTarget.personId) : undefined
+  const isTree = target?.kind === 'tree'
   const why = survey ? survey.why
+    : isTree ? 'our family tree'
     : askTarget?.kind === 'medical' ? 'our family health history, so doctors and the generations after us know what runs in the family'
     : aboutPerson ? (aboutPerson.isSelf ? 'our family tree' : `our family tree — getting ${aboutPerson.name}’s details right`)
     : chapterId ? `my life story — the part about “${CHAPTERS.find((c) => c.id === chapterId)?.title ?? 'my life'}”`
@@ -115,7 +117,7 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
     }
     const ask: Ask = { id: uid(), chapterId, questionId, target: askTarget, question: q.trim(), ...base }
     const more = askTarget?.kind === 'medical' && askTarget.category === 'family' ? 'health' as const : undefined
-    return { ask, asks: [ask], message: askMessage({ v: 1, id: ask.id, q: ask.question, ...common, more }, why), texted: false }
+    return { ask, asks: [ask], message: askMessage({ v: 1, id: ask.id, q: ask.question, ...common, more, ...(isTree ? { tree: 1 as const } : {}) }, why), texted: false }
   }
 
   async function prepare(list = filled.map(makeOne)) {
@@ -141,14 +143,19 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
   }
 
   const [copied, setCopied] = useState<string | null>(null)
-  const previewMsg = askMessage({ v: 1, id: 'preview', q: survey ? survey.title : q.trim(), qs: survey ? chosen.map((c) => c.question) : undefined, from, to: filled[0]?.name.trim() || 'there', note: note.trim() || undefined, reply: mine.trim() || undefined, box }, why)
+  const previewMsg = askMessage({ v: 1, id: 'preview', q: survey ? survey.title : q.trim(), qs: survey ? chosen.map((c) => c.question) : undefined, ...(isTree ? { tree: 1 as const } : {}), from, to: filled[0]?.name.trim() || 'there', note: note.trim() || undefined, reply: mine.trim() || undefined, box }, why)
 
   return (
     <Sheet title="Ask family" onClose={onClose}>
       <div className="stack">
         {!sent ? (
           <>
-            {survey ? (
+            {isTree ? (
+              <div className="card inset stack tight">
+                <strong>They’ll get a few easy steps</strong>
+                <p className="muted small">How they’re related to you, then their parents, brothers and sisters, husband or wife and kids, and grandparents — plus a box for anyone else. They can skip anything. You check it all before it’s added to your tree.</p>
+              </div>
+            ) : survey ? (
               <div className="field">
                 <span className="field-title">Questions in this survey <small className="muted">Uncheck any you don’t need.</small></span>
                 <div className="survey-pick stack tight">
@@ -230,7 +237,7 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
                   setSent([{ ...one, texted: true }])
                   window.location.href = smsLink(one.ask.toPhone, one.message)
                 }}>
-                <Icon name="share" size={20} /> Text {filled[0]?.name.trim() || 'them'} the {survey ? 'survey' : 'question'}
+                <Icon name="share" size={20} /> Text {filled[0]?.name.trim() || 'them'} the {survey || isTree ? 'survey' : 'question'}
               </a>
             ) : (
               <button className="btn big" disabled={!ready} onClick={() => prepare()}><Icon name="share" size={20} /> Get texts ready for {filled.length} people</button>

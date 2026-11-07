@@ -28,6 +28,7 @@ export default function FamilyTree() {
   const { data, isOwner, session } = useData()
   const [open, setOpen] = useState<ID | 'new' | null>(null)
   const [bulk, setBulk] = useState(false)
+  const [treeAsk, setTreeAsk] = useState(false)
   // The tree shows family; mentees, mentors and friends are listed under People Who Mattered.
   const family = useMemo(() => data.people.filter((p) => !p.circle || p.circle === 'family'), [data.people])
   const others = data.people.filter((p) => p.circle && p.circle !== 'family')
@@ -61,6 +62,12 @@ export default function FamilyTree() {
         <button className="card bulk-card" onClick={() => setBulk(true)}>
           <Icon name="mic" />
           <span><strong>Add more family by talking or typing</strong><small className="muted">Or bring in a family tree file, document or recording</small></span>
+        </button>
+      )}
+      {isOwner && (
+        <button className="card bulk-card" onClick={() => setTreeAsk(true)}>
+          <Icon name="share" />
+          <span><strong>Ask family to fill in the tree</strong><small className="muted">Send a link with a few easy steps — parents, brothers and sisters, kids, grandparents. You check it before it’s added.</small></span>
         </button>
       )}
 
@@ -109,6 +116,7 @@ export default function FamilyTree() {
       )}
 
       {bulk && <BulkFamily onClose={() => setBulk(false)} />}
+      {treeAsk && <AskSheet question="Help fill in our family tree" target={{ kind: 'tree' }} onClose={() => setTreeAsk(false)} />}
 
       {open && (
         <PersonSheet

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../lib/data'
 import { docxText, parseFamilyText, parseGedcom, TREE_PICTURE_PROMPT, type FamilyDraft } from '../lib/familyParse'
 import { applyFamilyDraft, type DraftChoices } from '../lib/familyApply'
@@ -17,11 +17,17 @@ const RECORDING_PROMPT = `Please write out the attached recording word for word.
 - Write only the words that are spoken — no summary or comments.
 - Spell names as carefully as you can. If a word is hard to make out, write [unclear].`
 
-export function BulkFamily({ onClose }: { onClose: () => void }) {
+export function BulkFamily({ onClose, initialText, intro, onAdded }: {
+  onClose: () => void
+  /** Start with this text already read (e.g. a family tree a relative filled in). */
+  initialText?: string
+  intro?: string
+  onAdded?: () => void
+}) {
   const { data, save, settings, session } = useData()
   const selfName = settings.storytellerName || session.name
   const ctx = { people: data.people, relations: data.relations, selfName }
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialText ?? '')
   const [draft, setDraft] = useState<FamilyDraft | null>(null)
   const [choices, setChoices] = useState<DraftChoices | null>(null)
   const [status, setStatus] = useState('')
@@ -73,6 +79,9 @@ export function BulkFamily({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // Something to review straight away: read it once when the sheet opens.
+  useEffect(() => { if (initialText?.trim()) review(parseFamilyText(initialText, ctx)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (draft && choices) {
     return <Review draft={draft} choices={choices} setChoices={setChoices} onBack={() => { setDraft(null); setChoices(null) }}
       onAdd={async () => {
@@ -80,10 +89,11 @@ export function BulkFamily({ onClose }: { onClose: () => void }) {
         try {
           const r = await applyFamilyDraft(draft, choices, { people: data.people, relations: data.relations, save, selfName })
           setStatus(`Added ${r.added} ${r.added === 1 ? 'person' : 'people'} and ${r.connected} connection${r.connected === 1 ? '' : 's'}.`)
+          onAdded?.()
           onClose()
         } catch (e: any) { setError(e?.message ?? 'Couldn’t add them.') }
         setBusy(false)
-      }} busy={busy} onClose={onClose} />
+      }} busy={busy} onClose={onClose} intro={intro} />
   }
 
   return (
@@ -139,8 +149,8 @@ export function BulkFamily({ onClose }: { onClose: () => void }) {
   )
 }
 
-function Review({ draft, choices, setChoices, onBack, onAdd, busy, onClose }: {
-  draft: FamilyDraft; choices: DraftChoices; setChoices: (c: DraftChoices) => void; onBack: () => void; onAdd: () => void; busy: boolean; onClose: () => void
+function Review({ draft, choices, setChoices, onBack, onAdd, busy, onClose, intro }: {
+  draft: FamilyDraft; choices: DraftChoices; setChoices: (c: DraftChoices) => void; onBack: () => void; onAdd: () => void; busy: boolean; onClose: () => void; intro?: string
 }) {
   const { data } = useData()
   const setP = (k: string, patch: Partial<DraftChoices['people'][string]>) => setChoices({ ...choices, people: { ...choices.people, [k]: { ...choices.people[k], ...patch } } })
@@ -162,6 +172,7 @@ function Review({ draft, choices, setChoices, onBack, onAdd, busy, onClose }: {
   return (
     <Sheet title="Check your family" onClose={onClose}>
       <div className="stack">
+        {intro && <p className="success small">{intro}</p>}
         <p className="muted">Here’s what I understood. Fix any names or years, untick anything that’s wrong, then add.</p>
 
         {noSelfOnTree && (

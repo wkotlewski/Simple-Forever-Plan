@@ -5,6 +5,7 @@ import { inboxAvailable, sendAnswer } from '../lib/inbox'
 import { Icon } from '../components/ui'
 import { TextField } from '../components/TextField'
 import { FAMILY_HISTORY } from '../lib/familyHistory'
+import TreeSurvey from './TreeSurvey'
 
 /**
  * What a relative sees after tapping the link in their text: one question, a way to answer by
@@ -30,6 +31,7 @@ function AskFooter({ from }: { from: string }) {
 }
 
 export default function AskAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
+  if (ask.tree) return <TreeSurvey ask={ask} onDone={onDone} Brand={AskBrand} Footer={AskFooter} />
   const qs = ask.qs ?? ask.hq?.map((i) => FAMILY_HISTORY[i]?.question).filter(Boolean)
   if (qs?.length) return <SurveyAnswer ask={{ ...ask, qs }} onDone={onDone} />
   return <OneQuestion ask={ask} onDone={onDone} />

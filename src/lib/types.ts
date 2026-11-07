@@ -46,7 +46,7 @@ export interface Ask {
   chapterId?: string
   questionId?: string
   /** For anything else: a medical item or family-history question, or a person on the tree. */
-  target?: { kind: 'medical'; itemId?: ID; category: MedicalCategory; title: string } | { kind: 'person'; personId: ID; field?: 'born' | 'died' }
+  target?: { kind: 'medical'; itemId?: ID; category: MedicalCategory; title: string } | { kind: 'person'; personId: ID; field?: 'born' | 'died' } | { kind: 'tree' }
   question: string
   /** Set when this question went out as part of a survey (one link, several questions). */
   surveyId?: ID

@@ -13,6 +13,7 @@ export interface AskPayload {
   note?: string     // optional personal note from the storyteller
   reply?: string    // storyteller's number to text the answer back to
   box?: string      // storyteller's answer mailbox, so the relative can just tap Send
+  tree?: 1          // the family tree survey
   more?: 'health'   // after answering, they can keep going with the other family health history questions
   hq?: number[]     // a family health history survey, as question numbers (keeps the link short); same as qs otherwise
   qs?: string[]     // a survey: several questions in one link (q is then the survey's title); answers go back as `${id}-${index}`
@@ -74,7 +75,9 @@ export function askMessage(p: AskPayload, why?: string) {
   const from = p.from.split(' ')[0]
   return [
     `Hi ${p.to}! It’s ${from}. I’m using Simple Forever Plan — an app for keeping our family’s stories, health history and family tree together in one place, so they’re never lost and can be passed down.`,
-    ...((p.qs ?? p.hq)?.length
+    ...(p.tree
+      ? [`I’m working on our family tree, and you know parts of it I don’t. It’s a few quick steps — parents, brothers and sisters, kids and grandparents. Skip anything you don’t know.`]
+      : (p.qs ?? p.hq)?.length
       ? [`I’m working on ${why || 'my life story'}, and put together ${(p.qs ?? p.hq)!.length} quick questions you may know more about than I do. Skip any you don’t know — even a few answers help.`]
       : [`I’m working on ${why || 'my life story'}, and you may remember this better than I do:`, `“${p.q}”`]),
     p.note ? p.note : '',

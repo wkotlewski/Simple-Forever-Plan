@@ -549,3 +549,10 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .lookup-verse small { font-family: inherit; display: block; margin-top: 4px; font-size: 14px; }
 .lookup-option { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card, transparent); color: inherit; font: inherit; cursor: pointer; }
 .lookup-option span { color: var(--ink-soft); font-size: 15px; }
+/* Family tree survey */
+.tree-progress { display: flex; gap: 6px; }
+.tree-progress span { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
+.tree-progress span.on { background: var(--brand); }
+.tree-person { display: flex; flex-direction: column; gap: 6px; }
+.tree-person .grid2 input { font-size: 16px; }
+.tree-reply-text { line-height: 1.6; margin: 0; }

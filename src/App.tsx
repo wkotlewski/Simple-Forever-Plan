@@ -8,6 +8,8 @@ import { clearHash, readHash, type ReplyPayload } from './lib/ask'
 import { ReplySheet } from './components/AskSheet'
 import AskAnswer from './screens/AskAnswer'
 import { extraHistory } from './lib/familyHistory'
+import { TREE_MARK } from './lib/treeSurvey'
+import { TreeReply } from './components/TreeReply'
 import { clearAnswers, inboxAvailable, readInbox, type InboxAnswer } from './lib/inbox'
 import Welcome from './screens/Welcome'
 import Home from './screens/Home'
@@ -166,7 +168,10 @@ function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: A
           )}
       </main>
       {reply && isOwner && !loading && <ReplySheet reply={reply} onClose={closeReply} />}
-      {!reply && next && isOwner && !loading && (
+      {!reply && next && isOwner && !loading && next.text.startsWith(TREE_MARK) && (
+        <TreeReply key={next.id} askId={next.askId} from={next.from} body={next.text} onAdded={() => clearAnswers(settings, [next.id])} onClose={() => doneWith(next.id)} />
+      )}
+      {!reply && next && isOwner && !loading && !next.text.startsWith(TREE_MARK) && (
         <ReplySheet key={next.id} answerId={next.id} reply={{ v: 1, id: next.askId, q: next.question, from: next.from, text: next.text }} audio={next.audio}
           onAdded={() => clearAnswers(settings, [next.id])} onClose={() => doneWith(next.id)} />
       )}

@@ -5,6 +5,7 @@ import { composeChapter, correctionsFrom, writerAvailable } from '../lib/compose
 import { ensureInbox } from '../lib/inbox'
 import Summary from './Summary'
 import { AiShare } from '../components/AiShare'
+import { LostRecordings } from '../components/LostRecordings'
 import { mediaKind } from '../lib/store'
 import type { Answer, ChapterStory } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader } from '../components/ui'
@@ -47,6 +48,8 @@ function ChapterList({ open, onBook, onSummary }: { open: (id: string, interview
           ))}
         </div>
       )}
+
+      {isOwner && <LostRecordings />}
 
       {isOwner && data.answers.some((a) => (a.text && !a.skipped) || a.contributions?.length) && (
         <button className="card summary-card" onClick={onSummary}>

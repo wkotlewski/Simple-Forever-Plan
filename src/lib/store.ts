@@ -1,4 +1,4 @@
-import { createStore, get, set, del, keys as idbKeys } from 'idb-keyval'
+import { createStore, get, set, del, update, keys as idbKeys } from 'idb-keyval'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CollectionMap, CollectionName, ID } from './types'
 import { getSupabase } from './supabase'
@@ -41,15 +41,23 @@ export const localStore: Store = {
     const map = ((await get(c, db)) ?? {}) as Record<ID, any>
     return Object.values(map)
   },
+  // Each change reads and writes in one step, so two saves at the same moment can't overwrite each other.
   async put(c, item) {
-    const map = ((await get(c, db)) ?? {}) as Record<ID, any>
-    map[(item as any).id] = item
-    await set(c, map, db)
+    await update(c, (map: Record<ID, any> | undefined) => ({ ...(map ?? {}), [(item as any).id]: item }), db)
+  },
+  async putMany(c, items) {
+    await update(c, (map: Record<ID, any> | undefined) => {
+      const next = { ...(map ?? {}) }
+      for (const it of items) next[(it as any).id] = it
+      return next
+    }, db)
   },
   async remove(c, id) {
-    const map = ((await get(c, db)) ?? {}) as Record<ID, any>
-    delete map[id]
-    await set(c, map, db)
+    await update(c, (map: Record<ID, any> | undefined) => {
+      const next = { ...(map ?? {}) }
+      delete next[id]
+      return next
+    }, db)
   },
   async putMedia(blob) {
     const id = `${kindOf(blob)}:${uid()}`
@@ -64,6 +72,11 @@ export const localStore: Store = {
     urlCache.set(id, url)
     return url
   },
+}
+
+/** Every recording, photo and file saved on this phone (used to find recordings never attached to an answer). */
+export async function listLocalMediaIds(): Promise<ID[]> {
+  return (await idbKeys(db)).map(String).filter((k) => k.startsWith('media:')).map((k) => k.slice('media:'.length))
 }
 
 /** The original saved file behind a this-device media id (used when moving everything to Google Drive). */

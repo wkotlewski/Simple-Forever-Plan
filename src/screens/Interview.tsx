@@ -52,6 +52,7 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   const [busy, setBusy] = useState(false)
   const [followUp, setFollowUp] = useState<string | null>(null)
   const [asking, setAsking] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
   const found = useSuggestions(existing ? [existing] : [])
   const rec = useRecorder()
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -66,49 +67,72 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
     await rec.start(kind)
   }
 
+  /**
+   * Saves what's in the editor onto this question. A follow-up adds to what was already said;
+   * a fresh answer replaces the text (a recording alone keeps the text that's there).
+   */
+  async function persist(v: { text: string; media: string[]; followUp: string | null; keep: boolean; existing?: Answer }) {
+    const text = v.text.trim()
+    if (!text && !v.media.length) return
+    const prior = v.existing && !v.existing.skipped ? v.existing.text : ''
+    const joined = v.followUp ? [prior, text].filter(Boolean).join('\n\n') : text || prior
+    const answer: Answer = {
+      id: v.existing?.id ?? uid(),
+      chapterId,
+      questionId: q.id,
+      question: q.text,
+      text: joined,
+      mediaIds: [...(v.existing?.mediaIds ?? []), ...v.media.filter((m) => !v.existing?.mediaIds.includes(m))],
+      createdAt: v.existing?.createdAt ?? Date.now(),
+      contributions: v.existing?.contributions,
+    }
+    await save('answers', answer)
+    if (v.keep && q.keepsake && text && !v.followUp) {
+      await save('messages', {
+        id: `from-${q.id}`, kind: q.keepsake, text, occasions: [KEEPSAKE_OCCASION[q.keepsake] ?? OCCASIONS[0]],
+        mediaIds: v.media, createdAt: Date.now(),
+      })
+    }
+    return answer
+  }
+
+  // Latest editor state, so anything unsaved is kept when moving to another question or screen.
+  const latest = useRef({ text: draft, media: pendingMedia, followUp, keep, existing })
+  latest.current = { text: draft, media: pendingMedia, followUp, keep, existing }
+  useEffect(() => () => {
+    const v = latest.current
+    if (v.text.trim() || v.media.length) persist(v).catch(() => null)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Recordings are saved to the question the moment you tap Stop; the words can be fixed afterward. */
   async function stopRecording() {
     const out = await rec.stop()
     if (!out) return
     setBusy(true)
     const id = await store.putMedia(out.blob)
-    setPendingMedia((m) => [...m, id])
-    setDraft(out.transcript)
+    const saved = await persist({ text: out.transcript, media: [id], followUp, keep: false, existing })
+    // Keep the editor open on the saved text so it can be corrected; it's already safe.
+    setDraft(saved?.text ?? out.transcript)
+    setPendingMedia([])
+    setFollowUp(null)
+    setJustSaved(true)
     setBusy(false)
   }
 
   async function upload(file: File) {
     setBusy(true)
     const id = await store.putMedia(file)
-    setPendingMedia((m) => [...m, id])
+    await persist({ text: '', media: [id], followUp: null, keep: false, existing })
     setMode((m) => m ?? 'write')
+    setJustSaved(true)
     setBusy(false)
   }
 
   async function commit() {
-    const text = draft.trim()
-    if (!text && !pendingMedia.length) return
+    if (!draft.trim() && !pendingMedia.length) { setMode(null); return }
     setBusy(true)
-    const prior = existing && !existing.skipped ? existing.text : ''
-    // A follow-up adds to what was already said; a fresh answer replaces it (unless only a recording was added).
-    const joined = followUp ? [prior, text].filter(Boolean).join('\n\n') : text || prior
-    const answer: Answer = {
-      id: existing?.id ?? uid(),
-      chapterId,
-      questionId: q.id,
-      question: q.text,
-      text: joined,
-      mediaIds: [...(existing?.mediaIds ?? []), ...pendingMedia],
-      createdAt: existing?.createdAt ?? Date.now(),
-      contributions: existing?.contributions,
-    }
-    await save('answers', answer)
-    if (keep && q.keepsake && text && !followUp) {
-      await save('messages', {
-        id: `from-${q.id}`, kind: q.keepsake, text, occasions: [KEEPSAKE_OCCASION[q.keepsake] ?? OCCASIONS[0]],
-        mediaIds: pendingMedia, createdAt: Date.now(),
-      })
-    }
-    setDraft(''); setPendingMedia([]); setMode(null); setFollowUp(null); setBusy(false)
+    await persist({ text: draft, media: pendingMedia, followUp, keep, existing })
+    setDraft(''); setPendingMedia([]); setMode(null); setFollowUp(null); setJustSaved(false); setBusy(false)
   }
 
   async function skip() {
@@ -148,6 +172,7 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
       {mode && rec.state !== 'recording' && (
         <div className="draft">
           {pendingMedia.length > 0 && <div className="media-stack">{pendingMedia.map((m) => <Media key={m} id={m} />)}</div>}
+          {justSaved && <p className="success"><Icon name="check" size={16} /> Saved to this question. Fix the words below if you like.</p>}
           <TextField id="answer-draft" multiline rows={6} autoFocus={mode === 'write'} value={draft} onChange={setDraft}
             label={mode === 'write' ? 'Your answer — type, or tap the microphone and talk' : canTranscribe ? 'What you said (fix anything that came out wrong)' : 'Write a few words about what you shared so it can go in your story'}
             placeholder="Write as much or as little as you like…" />
@@ -155,8 +180,8 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
             <label className="check"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Also save this in Words to Keep</label>
           )}
           <div className="row">
-            <button className="btn" disabled={busy || !hasDraft} onClick={commit}>{busy ? 'Saving…' : 'Save answer'}</button>
-            <button className="btn ghost" onClick={() => { setMode(null); setDraft(''); setPendingMedia([]) }}>Cancel</button>
+            <button className="btn" disabled={busy || !hasDraft} onClick={commit}>{busy ? 'Saving…' : justSaved ? 'Save changes' : 'Save answer'}</button>
+            <button className="btn ghost" onClick={() => { setMode(null); setDraft(''); setPendingMedia([]); setJustSaved(false) }}>{justSaved ? 'Done' : 'Cancel'}</button>
           </div>
         </div>
       )}

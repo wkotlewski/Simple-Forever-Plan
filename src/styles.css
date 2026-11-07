@@ -366,6 +366,12 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .ai-list li { display: flex; flex-direction: column; gap: 8px; padding-left: 4px; }
 .ai-list li::marker { font-weight: 700; color: var(--accent); }
 
+/* Recordings to put back */
+.lost { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 45%, var(--paper)); }
+.lost h3 { display: flex; align-items: center; gap: 8px; }
+.lost-item { padding-top: 12px; border-top: 1px solid var(--line); }
+.lost-item select { font-size: 16px; }
+
 /* Keepsakes */
 .occasions { display: flex; flex-direction: column; gap: 8px; }
 .keepsakes { display: flex; flex-direction: column; gap: 12px; }

@@ -35,6 +35,8 @@ export interface Contribution {
   text: string
   mediaIds: ID[]
   addedAt: number
+  /** The request it answered, so removing the request can remove its answers too. */
+  askId?: ID
 }
 
 /** A question sent to a relative by text, waiting for (or holding) their reply. */

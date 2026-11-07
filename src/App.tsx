@@ -98,7 +98,7 @@ function ReconnectBar() {
 
 function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: Access) => void }) {
   const [tab, setTab] = useState<Tab>('home')
-  const { loading, loadError, session, isOwner, store, settings } = useData()
+  const { loading, loadError, session, isOwner, store, settings, data } = useData()
   const [reply, setReply] = useState<ReplyPayload | null>(() => {
     try { return JSON.parse(localStorage.getItem(PENDING) ?? 'null') } catch { return null }
   })
@@ -126,7 +126,16 @@ function Shell({ onSignOut, onSwitch }: { onSignOut: () => void; onSwitch: (a: A
     const timer = window.setInterval(() => document.visibilityState === 'visible' && check(), 60_000)
     return () => { document.removeEventListener('visibilitychange', onVisible); window.clearInterval(timer) }
   }, [loading, isOwner, settings.inboxId, settings.inboxKey]) // eslint-disable-line react-hooks/exhaustive-deps
-  const next = inbox[0]
+  // Answers to requests that were removed are cleared from the mailbox instead of shown.
+  const known = new Set(data.asks.map((a) => a.id))
+  const orphans = inbox.filter((a) => !known.has(a.askId))
+  useEffect(() => {
+    if (!orphans.length || loading) return
+    clearAnswers(settings, orphans.map((a) => a.id)).catch(() => null)
+    orphans.forEach((a) => dismissed.add(a.id))
+    setInbox((q) => q.filter((a) => known.has(a.askId)))
+  }, [orphans.map((a) => a.id).join(), loading]) // eslint-disable-line react-hooks/exhaustive-deps
+  const next = inbox.find((a) => known.has(a.askId))
   const doneWith = (id: string) => { dismissed.add(id); setInbox((q) => q.filter((a) => a.id !== id)) }
 
   const tabs: { id: Tab; label: string; icon: string; hidden?: boolean }[] = [

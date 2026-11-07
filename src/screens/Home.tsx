@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useData } from '../lib/data'
 import type { Access } from '../lib/auth'
 import StorageSheet from '../components/StorageSheet'
+import { RequestsSheet } from '../components/AskSheet'
 import { CHAPTERS, isFollowUp } from '../lib/questions'
 import { Icon } from '../components/ui'
 import type { Tab } from '../App'
@@ -15,6 +16,7 @@ const TOTAL = CHAPTERS.reduce((n, c) => n + c.questions.length, 0)
 export default function Home({ go, onSignOut, onSwitch }: { go: (t: Tab) => void; onSignOut: () => void; onSwitch: (a: Access) => void }) {
   const { data, session, isOwner, settings, store, save } = useData()
   const [storage, setStorage] = useState(false)
+  const [requests, setRequests] = useState(false)
   // Weekly reminder to save a backup, once there's something worth keeping.
   const somethingSaved = data.answers.length + data.people.length + data.medical.length + data.messages.length > 0
   const needsBackup = isOwner && store.mode !== 'cloud' && somethingSaved
@@ -83,6 +85,20 @@ export default function Home({ go, onSignOut, onSwitch }: { go: (t: Tab) => void
         </section>
       )}
 
+      {isOwner && data.asks.length > 0 && (() => {
+        const waiting = new Set(data.asks.filter((x) => !x.answeredAt).map((x) => x.surveyId ?? x.id)).size
+        const total = new Set(data.asks.map((x) => x.surveyId ?? x.id)).size
+        return (
+          <section className="card share-card" onClick={() => setRequests(true)} role="button">
+            <Icon name="share" />
+            <div>
+              <strong>Requests sent to family</strong>
+              <p className="muted">{total} sent{waiting ? ` · ${waiting} waiting for an answer` : ''}. See them or remove any.</p>
+            </div>
+          </section>
+        )
+      })()}
+
       {needsBackup && (
         <section className="card backup-reminder" role="status">
           <Icon name="upload" />
@@ -110,6 +126,7 @@ export default function Home({ go, onSignOut, onSwitch }: { go: (t: Tab) => void
         <button className="link-btn" onClick={onSignOut}>Sign out</button>
       </footer>
 
+      {requests && <RequestsSheet onClose={() => setRequests(false)} />}
       {storage && <StorageSheet onClose={() => setStorage(false)} onSwitch={onSwitch} onDisconnect={onSignOut} />}
     </div>
   )

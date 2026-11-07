@@ -294,7 +294,7 @@ export function ReplySheet({ reply, audio: sentAudio, answerId, onAdded, onClose
     const target = ask?.target
     const scope = target?.kind === 'medical' ? 'medical' : undefined
     const mediaIds = audio ? [await store.putMedia(audio, scope)] : []
-    const contribution = { id: cid, from: reply.from, text: text.trim(), mediaIds, addedAt: Date.now() }
+    const contribution = { id: cid, from: reply.from, text: text.trim(), mediaIds, addedAt: Date.now(), askId: reply.id }
     const merge = (list?: Contribution[]) => [...(list ?? []).filter((c) => c.id !== cid), contribution]
 
     if (target?.kind === 'medical') {
@@ -394,12 +394,22 @@ export function PasteReply({ onReply }: { onReply: (r: ReplyPayload) => void }) 
 
 /** What relatives shared when asked, shown with their name (and voice, if they sent a recording). */
 export function Contributions({ items, label = 'remembers' }: { items?: Contribution[]; label?: string }) {
+  const { data, save, remove, isOwner } = useData()
+  const [confirm, setConfirm] = useState<string | null>(null)
   if (!items?.length) return null
   return (
     <div className="family-answers">
       {items.map((c) => (
         <div key={c.id} className="contribution" onClick={(e) => e.stopPropagation()}>
-          <p className="label">{c.from} {label}</p>
+          <div className="row between">
+            <p className="label">{c.from} {label}</p>
+            {isOwner && (confirm === c.id ? (
+              <span className="row">
+                <button className="link-btn small danger-text" onClick={() => removeContributions(new Set([c.id]), { data, save, remove })}>Remove</button>
+                <button className="link-btn small" onClick={() => setConfirm(null)}>Keep</button>
+              </span>
+            ) : <button className="icon-btn small" aria-label={`Remove ${c.from}’s answer`} onClick={() => setConfirm(c.id)}>✕</button>)}
+          </div>
           {c.text && <p className="answer-text">{c.text}</p>}
           {c.mediaIds.map((m) => <Media key={m} id={m} />)}
         </div>
@@ -408,8 +418,83 @@ export function Contributions({ items, label = 'remembers' }: { items?: Contribu
   )
 }
 
-/** Questions sent to relatives that haven't been answered yet. */
+/** Questions sent to relatives that haven't been answered yet — each can be called off. */
 export function Waiting({ asks }: { asks: Ask[] }) {
+  const { data, save, remove } = useData()
   if (!asks.length) return null
-  return <>{asks.map((a) => <p key={a.id} className="waiting"><span className="pulse-dot" /> Asked {a.toName} · waiting for an answer</p>)}</>
+  return <>{asks.map((a) => (
+    <p key={a.id} className="waiting" onClick={(e) => e.stopPropagation()}>
+      <span className="pulse-dot" /> Asked {a.toName === 'everyone' ? 'your family thread' : a.toName} · waiting for an answer
+      <button className="link-btn small" onClick={() => removeAsks([a.id], { data, save, remove }, false)}>Cancel</button>
+    </p>
+  ))}</>
+}
+
+type Ctx = { data: ReturnType<typeof useData>['data']; save: ReturnType<typeof useData>['save']; remove: ReturnType<typeof useData>['remove'] }
+
+/** Takes answers out of wherever they were added (story, medical binder, family tree). Story entries that held nothing else go too. */
+export async function removeContributions(match: Set<string>, { data, save, remove }: Ctx, askIds: Set<string> = new Set()) {
+  const gone = (c: Contribution) => match.has(c.id) || (!!c.askId && askIds.has(c.askId)) || askIds.has(c.id)
+  for (const a of data.answers) {
+    if (!a.contributions?.some(gone)) continue
+    const left = a.contributions.filter((c) => !gone(c))
+    if (a.questionId.startsWith('asked-') && !a.text.trim() && !a.mediaIds.length && !left.length) await remove('answers', a.id)
+    else await save('answers', { ...a, contributions: left })
+  }
+  for (const m of data.medical) if (m.contributions?.some(gone)) await save('medical', { ...m, contributions: m.contributions.filter((c) => !gone(c)) })
+  for (const p of data.people) if (p.contributions?.some(gone)) await save('people', { ...p, contributions: p.contributions.filter((c) => !gone(c)) })
+}
+
+/** Removes sent requests — and, if asked, the answers they brought in. */
+export async function removeAsks(ids: string[], ctx: Ctx, withAnswers: boolean) {
+  const set = new Set(ids)
+  if (withAnswers) await removeContributions(new Set(), ctx, set)
+  for (const id of ids) await ctx.remove('asks', id)
+}
+
+/** Everything sent to family, grouped by request (a survey counts as one), with a way to remove each. */
+export function RequestsSheet({ onClose }: { onClose: () => void }) {
+  const { data, save, remove } = useData()
+  const [confirm, setConfirm] = useState<string | null>(null)
+  const groups = useMemo(() => {
+    const by = new Map<string, Ask[]>()
+    for (const a of [...data.asks].sort((x, y) => y.sentAt - x.sentAt)) {
+      const key = a.surveyId ?? a.id
+      by.set(key, [...(by.get(key) ?? []), a])
+    }
+    return [...by.entries()]
+  }, [data.asks])
+  const answersFor = (asks: Ask[]) => {
+    const ids = new Set(asks.map((a) => a.id))
+    return [...data.answers, ...data.medical, ...data.people].flatMap((x) => x.contributions ?? []).filter((c) => ids.has(c.id) || (c.askId && ids.has(c.askId))).length
+  }
+  return (
+    <Sheet title="Requests sent to family" onClose={onClose}>
+      <div className="stack">
+        {!groups.length && <p className="muted">You haven’t asked anyone yet. Look for <strong>Ask family</strong> next to any question.</p>}
+        {groups.map(([key, asks]) => {
+          const a = asks[0]
+          const n = answersFor(asks)
+          const who = a.toName === 'everyone' ? 'Your family thread' : a.toName
+          return (
+            <div key={key} className="card inset request-row stack tight">
+              <p className="label">{who} · {new Date(a.sentAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
+              <strong>{a.surveyId ? `Family health history survey · ${asks.length} questions` : `“${a.question}”`}</strong>
+              <small className="muted">{n ? `${n} answer${n === 1 ? '' : 's'} added` : asks.some((x) => x.answeredAt) ? 'Answered' : 'Waiting for an answer'}</small>
+              {confirm === key ? (
+                <div className="stack tight">
+                  <p className="small">{n ? 'Remove this request? You can also take out the answers it brought in.' : 'Remove this request? Their link will stop adding answers to your app.'}</p>
+                  <div className="row wrap">
+                    {n > 0 && <button className="btn danger small" onClick={async () => { await removeAsks(asks.map((x) => x.id), { data, save, remove }, true); setConfirm(null) }}>Remove request and its {n} answer{n === 1 ? '' : 's'}</button>}
+                    <button className={`btn small ${n ? 'secondary' : 'danger'}`} onClick={async () => { await removeAsks(asks.map((x) => x.id), { data, save, remove }, false); setConfirm(null) }}>{n ? 'Remove request, keep answers' : 'Remove request'}</button>
+                    <button className="btn ghost small" onClick={() => setConfirm(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : <button className="link-btn small" onClick={() => setConfirm(key)}>Remove…</button>}
+            </div>
+          )
+        })}
+      </div>
+    </Sheet>
+  )
 }

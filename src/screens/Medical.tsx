@@ -124,7 +124,7 @@ export default function Medical() {
         )}
         {FAMILY_HISTORY.map((f) => {
           const item = items.find((i) => i.category === 'family' && i.title === f.title)
-          const answered = item && (item.details || item.contributions?.length || item.mediaIds.length)
+          const answered = !!item && !!(item.details || item.contributions?.length || item.mediaIds.length)
           if (!isOwner && !answered) return null
           return (
             <article key={f.title} className={`card med-item history-q ${answered ? 'answered' : ''}`}>

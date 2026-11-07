@@ -528,3 +528,8 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .doc-thumb { width: 72px; flex: none; }
 .doc-thumb .media-img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; }
 @media (prefers-color-scheme: dark) { .doc-list.watch strong { color: #e0a84a; } .doc-list.good strong { color: #7cc49a; } }
+
+.danger-text { color: var(--danger, #b3261e); }
+.icon-btn.small { width: 28px; height: 28px; font-size: 13px; }
+.waiting .link-btn { margin-left: 8px; }
+.request-row strong { font-weight: 600; }

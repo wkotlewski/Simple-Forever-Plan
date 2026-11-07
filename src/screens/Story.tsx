@@ -14,7 +14,7 @@ import type { Answer, ChapterStory } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader } from '../components/ui'
 import Interview from './Interview'
 import Book from './Book'
-import { PasteReply } from '../components/AskSheet'
+import { Contributions, PasteReply } from '../components/AskSheet'
 import { offerReply } from '../lib/ask'
 
 type View = { kind: 'list' } | { kind: 'interview'; id: string } | { kind: 'chapter'; id: string } | { kind: 'book' } | { kind: 'summary' }
@@ -257,13 +257,7 @@ function Recordings({ answers }: { answers: Answer[] }) {
           <div className="media-stack">{a.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
           {isOwner && <Transcribe answer={a} />}
           <ItemDocs docs={listDocuments({ medical: [], answers: [a] }).filter((d) => isOwner || d.summary)} onSummarize={setSummarizing} subtle />
-          {a.contributions?.map((c) => (
-            <div key={c.id} className="contribution">
-              <p className="label">{c.from} remembers</p>
-              <p className="answer-text">{c.text}</p>
-              {c.mediaIds.map((m) => <Media key={m} id={m} />)}
-            </div>
-          ))}
+          <Contributions items={a.contributions} />
         </article>
       ))}
       {summarizing && <SummarizeSheet docs={summarizing} onClose={() => setSummarizing(null)} />}

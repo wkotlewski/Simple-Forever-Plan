@@ -9,6 +9,25 @@ import { TextField } from '../components/TextField'
  * What a relative sees after tapping the link in their text: one question, a way to answer by
  * typing or talking, and a button to text the answer back. No sign-up, nothing saved on their phone.
  */
+/** The app's name and logo at the top, so the page is clearly from Simple Forever Plan. */
+function AskBrand() {
+  return (
+    <header className="ask-brand">
+      <span className="logo small"><Icon name="heart" size={20} /></span>
+      <span><strong>Simple Forever Plan</strong><small>Family stories, kept forever</small></span>
+    </header>
+  )
+}
+
+function AskFooter({ from }: { from: string }) {
+  return (
+    <footer className="ask-foot">
+      <p><strong>What is this?</strong> Simple Forever Plan is an app for keeping a family’s stories, health history and family tree together in one private place, so they can be passed down.</p>
+      <p>Your answer goes only to {from.split(' ')[0]}. No account or download needed.</p>
+    </footer>
+  )
+}
+
 export default function AskAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
   if (ask.qs?.length) return <SurveyAnswer ask={ask} onDone={onDone} />
   return <OneQuestion ask={ask} onDone={onDone} />
@@ -49,8 +68,8 @@ function SurveyAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) 
 
   return (
     <div className="welcome ask-page">
+      <AskBrand />
       <div className="welcome-hero">
-        <div className="logo"><Icon name="heart" size={30} /></div>
         <p className="eyebrow">{ask.from} is asking for your help</p>
         <h1 className="ask-question">{ask.q}</h1>
         <p className="ask-note">{qs.length} quick questions. Answer what you know and skip the rest — even one answer helps.</p>
@@ -96,6 +115,7 @@ function SurveyAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) 
           <button className="link-btn" onClick={onDone}>Start a story of my own</button>
         </div>
       )}
+      <AskFooter from={ask.from} />
     </div>
   )
 }
@@ -132,8 +152,8 @@ function OneQuestion({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
 
   return (
     <div className="welcome ask-page">
+      <AskBrand />
       <div className="welcome-hero">
-        <div className="logo"><Icon name="heart" size={30} /></div>
         <p className="eyebrow">{ask.from} is asking for your help</p>
         <h1 className="ask-question">“{ask.q}”</h1>
         {ask.note && <p className="ask-note">{ask.note}</p>}
@@ -219,6 +239,7 @@ function OneQuestion({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
           <button className="link-btn" onClick={onDone}>Start a story of my own</button>
         </div>
       )}
+      <AskFooter from={ask.from} />
     </div>
   )
 }

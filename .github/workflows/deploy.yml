@@ -32,6 +32,9 @@ jobs:
           # Settings like the Supabase project and Google client ID live in .env.production.
       - name: Commit the built app to app/
         run: |
+          # Keep the previous build's files next to the new ones: a phone that still has the old page cached
+          # (Pages caches it for ~10 minutes) would otherwise load it with no styles.
+          if [ -d app/assets ]; then cp -n app/assets/* dist/assets/ 2>/dev/null || true; fi
           rm -rf app && mv dist app
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

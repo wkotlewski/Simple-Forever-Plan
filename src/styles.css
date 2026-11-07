@@ -497,3 +497,19 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .survey-pick .check { align-items: flex-start; }
 .survey-pick .check small { font-weight: 400; }
 .survey-q + .survey-q { padding-top: 4px; }
+/* Relative's answer page: clearly from the app */
+.ask-page { padding-top: calc(16px + env(safe-area-inset-top)); }
+.ask-brand { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.ask-brand .logo.small { width: 38px; height: 38px; flex: none; }
+.ask-brand span { display: flex; flex-direction: column; line-height: 1.2; }
+.ask-brand strong { font-family: var(--serif, Georgia, serif); font-size: 19px; }
+.ask-brand small { color: var(--ink-soft); font-size: 13px; }
+.ask-page .welcome-hero { gap: 8px; }
+.ask-page .welcome-hero .eyebrow { font-size: 13px; }
+.ask-page .ask-question { font-size: 26px; line-height: 1.25; }
+.ask-page .card { padding: 18px; }
+.ask-page .card .btn.big { width: 100%; justify-content: center; }
+.ask-page .card .link-btn { align-self: center; }
+.ask-page .center-text { text-align: center; align-items: center; }
+.ask-foot { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.ask-foot p { font-size: 14px; color: var(--ink-soft); }

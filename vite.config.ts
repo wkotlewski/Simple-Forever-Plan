@@ -5,4 +5,6 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: process.env.BASE_PATH ?? '/',
+  // SINGLE_FILE=1 bundles everything into one script (used for the in-chat preview).
+  build: process.env.SINGLE_FILE ? { rollupOptions: { output: { inlineDynamicImports: true } } } : {},
 })

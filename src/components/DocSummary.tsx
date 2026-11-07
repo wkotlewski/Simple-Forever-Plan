@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useData } from '../lib/data'
 import { docPrompt, parseDocSummary, type DocRef } from '../lib/docSummary'
-import { saveToApp } from '../lib/backup'
+import { shareToAi } from '../lib/aiShare'
 import type { DocSummary } from '../lib/types'
 import { Icon, Media, Sheet } from './ui'
 import { TextField } from './TextField'
@@ -95,17 +95,10 @@ export function SummarizeSheet({ docs, onClose }: { docs: DocRef[]; onClose: () 
 
   async function send() {
     setError('')
-    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
-    // Copy the instructions too, in case the AI app only takes the file.
-    navigator.clipboard?.writeText(prompt).catch(() => null)
-    if (file && nav.share && nav.canShare?.({ files: [file], text: prompt })) {
-      try { await nav.share({ files: [file], text: prompt }); setNote('Sent. If the instructions didn’t come through, paste them in your AI app — they’re copied.'); return }
-      catch (e: any) { if (e?.name === 'AbortError') return }
-    }
-    if (file) {
-      const r = await saveToApp(file, { afterTap: true })
-      if (r !== 'cancelled') setNote('The document is saved and the instructions are copied. Open your AI app, attach the document, paste, and send.')
-    } else setError('Couldn’t open this document.')
+    if (!file) { setError('Couldn’t open this document.'); return }
+    const r = await shareToAi(file, prompt)
+    if (r === 'shared') setNote('Document sent. Now paste the instructions in the message box (they’re copied) and send.')
+    if (r === 'saved') setNote('Document saved and instructions copied. In your AI app, attach the document, paste the instructions, and send.')
   }
 
   async function keep() {

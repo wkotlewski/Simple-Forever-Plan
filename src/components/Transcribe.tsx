@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useData } from '../lib/data'
 import { mediaKind } from '../lib/store'
 import { saveToApp } from '../lib/backup'
+import { shareToAi, toSpeechWav } from '../lib/aiShare'
 import { CHAPTERS } from '../lib/questions'
 import type { Answer } from '../lib/types'
 import { TextField } from './TextField'
@@ -88,9 +89,12 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
       if (!u || !live) return
       setUrl(u)
       const blob = await (await fetch(u)).blob()
-      const ext = (blob.type.split('/')[1] ?? 'webm').split(';')[0].replace('mpeg', 'mp3').replace('x-m4a', 'm4a')
       const chapter = CHAPTERS.find((c) => c.id === answer.chapterId)?.title ?? 'Story'
-      if (live) setFile(new File([blob], `${chapter} - ${answer.question}`.replace(/[\\/:*?"<>|]/g, '').slice(0, 70) + `.${ext}`, { type: blob.type }))
+      const name = `${chapter} - ${answer.question}`.replace(/[\\/:*?"<>|]/g, '').slice(0, 70)
+      // A plain sound file every AI app can open; if converting fails, send the original.
+      const wav = await toSpeechWav(blob, name).catch(() => null)
+      const ext = (blob.type.split('/')[1] ?? 'webm').split(';')[0].replace('mpeg', 'mp3').replace('x-m4a', 'm4a').replace(/^mp4$/, 'm4a')
+      if (live) setFile(wav ?? new File([blob], `${name}.${ext}`, { type: blob.type.replace('video/', 'audio/') }))
     })()
     return () => { live = false }
   }, [answer?.id, media, store]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -108,16 +112,10 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
   }
 
   async function send() {
-    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
-    navigator.clipboard?.writeText(prompt).catch(() => null)
-    if (file && nav.share && nav.canShare?.({ files: [file], text: prompt })) {
-      try { await nav.share({ files: [file], text: prompt }); setNote('Sent. If the instructions didn’t come through, paste them in your AI app — they’re copied.'); return }
-      catch (e: any) { if (e?.name === 'AbortError') return }
-    }
-    if (file) {
-      const r = await saveToApp(file, { afterTap: true })
-      if (r !== 'cancelled') setNote('The recording is saved and the instructions are copied. Open your AI app, attach the recording, paste, and send.')
-    }
+    if (!file) return
+    const r = await shareToAi(file, prompt)
+    if (r === 'shared') setNote('Recording sent. Now paste the instructions in the message box (they’re copied) and send.')
+    if (r === 'saved') setNote('Recording saved and instructions copied. In your AI app, attach the recording, paste the instructions, and send.')
   }
 
   return (
@@ -129,9 +127,10 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
           : <audio src={url} controls className="transcribe-player" />)}
         <ol className="ai-list">
           <li>
-            <span>Send this recording to your AI app with instructions to write out exactly what you said. Apps that take recordings, like ChatGPT or Gemini, work best.</span>
+            <span>Send this recording to your AI app — the instructions are copied at the same time, so just paste them in the message box and send. Gemini and ChatGPT take recordings.</span>
             <div className="row wrap">
-              <button className="btn small" disabled={!file} onClick={send}><Icon name="share" size={16} /> Send to my AI app</button>
+              <button className="btn small" disabled={!file} onClick={send}><Icon name="share" size={16} /> {file ? 'Send to my AI app' : 'Getting the recording ready…'}</button>
+              {file && <button className="btn ghost small" onClick={async () => { const r = await saveToApp(file, { afterTap: true }); if (r !== 'cancelled') setNote('Recording saved. Attach it in your AI app.') }}>Save the recording</button>}
               <button className="btn ghost small" onClick={() => navigator.clipboard?.writeText(prompt).then(() => setNote('Instructions copied.')).catch(() => null)}>Copy instructions</button>
             </div>
             {note && <p className="muted small">{note}</p>}

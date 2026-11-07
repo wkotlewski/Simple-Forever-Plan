@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../lib/data'
+import { shareToAi, toSpeechWav } from '../lib/aiShare'
 import { docxText, parseFamilyText, parseGedcom, TREE_PICTURE_PROMPT, type FamilyDraft } from '../lib/familyParse'
 import { applyFamilyDraft, type DraftChoices } from '../lib/familyApply'
 import { TextField } from './TextField'
@@ -69,7 +70,11 @@ export function BulkFamily({ onClose, initialText, intro, onAdded }: {
         setStatus('Text brought in. Check it, then tap Read my family.')
         return
       }
-      if (f.type.startsWith('audio/') || f.type.startsWith('video/')) { setAiFile({ file: f, kind: 'recording' }); return }
+      if (f.type.startsWith('audio/') || f.type.startsWith('video/')) {
+        setBusy(true)
+        const wav = await toSpeechWav(f, f.name.replace(/\.[^.]+$/, '')).catch(() => null)
+        setAiFile({ file: wav ?? f, kind: 'recording' }); return
+      }
       if (f.type.startsWith('image/') || n.endsWith('.pdf')) { setAiFile({ file: f, kind: 'picture' }); return }
       setError('That kind of file can’t be read here. Try a family tree file (.ged), a Word document, or a recording.')
     } catch (e: any) {
@@ -129,13 +134,9 @@ export function BulkFamily({ onClose, initialText, intro, onAdded }: {
             <div className="row wrap">
               <button className="btn small" onClick={async () => {
                 const prompt = aiFile.kind === 'picture' ? TREE_PICTURE_PROMPT : RECORDING_PROMPT
-                navigator.clipboard?.writeText(prompt).catch(() => null)
-                const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
-                if (nav.share && nav.canShare?.({ files: [aiFile.file], text: prompt })) {
-                  try { await nav.share({ files: [aiFile.file], text: prompt }); setAiNote('Sent. If the instructions didn’t come through, paste them — they’re copied.'); return }
-                  catch (e: any) { if (e?.name === 'AbortError') return }
-                }
-                setAiNote('Instructions copied. Open your AI app, attach the file, paste, and send.')
+                const r = await shareToAi(aiFile.file, prompt)
+                if (r === 'shared') setAiNote('Sent. Now paste the instructions in the message box (they’re copied) and send.')
+                if (r === 'saved') setAiNote('Saved and instructions copied. In your AI app, attach the file, paste, and send.')
               }}><Icon name="share" size={16} /> Send to my AI app</button>
               <button className="btn ghost small" onClick={async () => {
                 try { await navigator.clipboard.writeText(aiFile.kind === 'picture' ? TREE_PICTURE_PROMPT : RECORDING_PROMPT); setCopied(true) } catch { setCopied(false) }

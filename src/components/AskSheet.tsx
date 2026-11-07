@@ -15,32 +15,45 @@ const NOTES = ['Just want to make sure I have this right.', 'No rush — wheneve
  * Text one question to a relative. The question comes drafted for whatever you're looking at, with other
  * ready-made questions to pick from; everything can be changed before sending.
  */
+/** The phone's contact picker (Android Chrome and some others); not every phone offers it. */
+const contactsSupported = typeof navigator !== 'undefined' && 'contacts' in navigator && 'select' in ((navigator as any).contacts ?? {})
+async function pickContacts(): Promise<{ name: string; phone: string }[]> {
+  const picked = await (navigator as any).contacts.select(['name', 'tel'], { multiple: true })
+  return (picked ?? []).flatMap((c: any) => (c.tel?.[0] ? [{ name: c.name?.[0] ?? '', phone: c.tel[0] }] : []))
+}
+
+interface Recipient { name: string; phone: string }
+const digits = (p: string) => p.replace(/\D/g, '')
+
+/**
+ * Text one question to one or more relatives. The question comes drafted for whatever you're looking at,
+ * with other ready-made questions to pick from. Each person gets their own link, so every answer comes back
+ * with their name on it.
+ */
 export function AskSheet({ chapterId, questionId, target, question, suggestions, onClose }: {
   chapterId?: string; questionId?: string; target?: Ask['target']; question: string; suggestions?: (string | Draft)[]; onClose: () => void
 }) {
   const { data, save, settings, session } = useData()
   const [q, setQ] = useState(question)
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [people, setPeople] = useState<Recipient[]>([{ name: '', phone: '' }])
   const [note, setNote] = useState('')
   const [mine, setMine] = useState(settings.phone ?? '')
-  const [sent, setSent] = useState<Ask | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [sent, setSent] = useState<{ ask: Ask; message: string; texted: boolean }[] | null>(null)
   const [box, setBox] = useState(settings.inboxId)
   const [preparing, setPreparing] = useState(inboxAvailable && !settings.inboxId)
   const [showMessage, setShowMessage] = useState(false)
+  const [contactError, setContactError] = useState('')
 
   // People you've asked before, so they're one tap away.
   const recent = useMemo(() => {
-    const seen = new Map<string, { name: string; phone: string }>()
+    const seen = new Map<string, Recipient>()
     for (const a of [...data.asks].sort((x, y) => y.sentAt - x.sentAt)) {
-      const key = a.toPhone.replace(/\D/g, '')
+      const key = digits(a.toPhone)
       if (key && !seen.has(key)) seen.set(key, { name: a.toName, phone: a.toPhone })
     }
-    return [...seen.values()].slice(0, 6)
+    return [...seen.values()].slice(0, 8)
   }, [data.asks])
 
-  // Set up the answer mailbox the first time, so relatives can just tap Send.
   useEffect(() => {
     if (!preparing) return
     ensureInbox(settings).then(async (next) => {
@@ -50,19 +63,35 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
 
   const drafts: Draft[] = (suggestions ?? []).map((d) => (typeof d === 'string' ? { text: d } : d))
   const options = [...new Set([question, ...drafts.map((d) => d.text)])]
-  // If the chosen question is about a birthday or date of passing, the answer can fill that in on the tree.
   const field = drafts.find((d) => d.text === q)?.field
   const askTarget: Ask['target'] = target?.kind === 'person' ? { kind: 'person', personId: target.personId, ...(field ? { field } : {}) } : target
-  const ready = q.trim() && name.trim() && phone.replace(/\D/g, '').length >= 7 && !preparing
-  const ask: Ask = { id: sent?.id ?? uid(), chapterId, questionId, target: askTarget, question: q.trim(), toName: name.trim(), toPhone: phone.trim(), note: note.trim() || undefined, sentAt: Date.now() }
-  const message = askMessage({ v: 1, id: ask.id, q: q.trim(), from: settings.storytellerName || session.name, to: ask.toName || 'there', note: ask.note, reply: mine.trim() || undefined, box })
+  const filled = people.filter((p) => p.name.trim() && digits(p.phone).length >= 7)
+  const ready = q.trim() && filled.length > 0 && !preparing
+  const from = settings.storytellerName || session.name
 
-  async function record() {
-    if (sent) return
-    await save('asks', ask)
-    if (mine.trim() !== (settings.phone ?? '')) await save('settings', { ...settings, inboxId: box ?? settings.inboxId, phone: mine.trim() || undefined })
-    setSent(ask)
+  const addPeople = (list: Recipient[]) => setPeople((cur) => {
+    const keep = cur.filter((p) => p.name.trim() || p.phone.trim())
+    const have = new Set(keep.map((p) => digits(p.phone)))
+    const merged = [...keep, ...list.filter((p) => !have.has(digits(p.phone)))]
+    return merged.length ? merged : [{ name: '', phone: '' }]
+  })
+  const setPerson = (i: number, patch: Partial<Recipient>) => setPeople((cur) => cur.map((p, j) => (j === i ? { ...p, ...patch } : p)))
+  const isChosen = (r: Recipient) => people.some((p) => digits(p.phone) === digits(r.phone))
+
+  function makeOne(r: Recipient) {
+    const ask: Ask = { id: uid(), chapterId, questionId, target: askTarget, question: q.trim(), toName: r.name.trim(), toPhone: r.phone.trim(), note: note.trim() || undefined, sentAt: Date.now() }
+    return { ask, message: askMessage({ v: 1, id: ask.id, q: ask.question, from, to: ask.toName, note: ask.note, reply: mine.trim() || undefined, box }), texted: false }
   }
+
+  async function prepare() {
+    const list = filled.map(makeOne)
+    for (const it of list) await save('asks', it.ask)
+    if (mine.trim() !== (settings.phone ?? '')) await save('settings', { ...settings, inboxId: box ?? settings.inboxId, phone: mine.trim() || undefined })
+    setSent(list)
+    return list
+  }
+
+  const previewMsg = askMessage({ v: 1, id: 'preview', q: q.trim(), from, to: filled[0]?.name.trim() || 'there', note: note.trim() || undefined, reply: mine.trim() || undefined, box })
 
   return (
     <Sheet title="Ask family" onClose={onClose}>
@@ -82,17 +111,33 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
             <TextField id="ask-question" multiline rows={2} label={options.length > 1 ? 'Your question (change it however you like)' : 'Your question'} value={q} onChange={setQ} />
 
             <div className="field">
-              <span className="field-title">Who should you ask?</span>
+              <span className="field-title">Who should you ask? <small className="muted">You can pick more than one.</small></span>
+              <div className="row wrap">
+                {contactsSupported && (
+                  <button type="button" className="btn secondary small" onClick={async () => {
+                    setContactError('')
+                    try { addPeople(await pickContacts()) } catch { setContactError('Couldn’t open your contacts. You can type names and numbers instead.') }
+                  }}><Icon name="plus" size={16} /> Choose from my contacts</button>
+                )}
+              </div>
+              {contactError && <p className="error">{contactError}</p>}
               {recent.length > 0 && (
                 <div className="chips">{recent.map((r) => (
-                  <button key={r.phone} type="button" className={`chip ${phone === r.phone ? 'on' : ''}`} onClick={() => { setName(r.name); setPhone(r.phone) }}>{r.name}</button>
+                  <button key={r.phone} type="button" className={`chip ${isChosen(r) ? 'on' : ''}`}
+                    onClick={() => (isChosen(r) ? setPeople((cur) => { const n = cur.filter((p) => digits(p.phone) !== digits(r.phone)); return n.length ? n : [{ name: '', phone: '' }] }) : addPeople([r]))}>
+                    {isChosen(r) && <Icon name="check" size={14} />} {r.name}
+                  </button>
                 ))}</div>
               )}
             </div>
-            <div className="grid2">
-              <TextField id="ask-to-name" label="Their name" value={name} onChange={setName} placeholder="e.g. Mom" />
-              <TextField id="ask-to-phone" label="Mobile number" type="tel" value={phone} onChange={setPhone} placeholder="(555) 123-4567" />
-            </div>
+            {people.map((p, i) => (
+              <div key={i} className="recipient">
+                <TextField id={`ask-to-name-${i}`} label={i === 0 ? 'Their name' : 'Name'} value={p.name} onChange={(v) => setPerson(i, { name: v })} placeholder="e.g. Mom" />
+                <TextField id={`ask-to-phone-${i}`} label="Mobile number" type="tel" value={p.phone} onChange={(v) => setPerson(i, { phone: v })} placeholder="(555) 123-4567" />
+                {people.length > 1 && <button type="button" className="icon-btn" aria-label={`Remove ${p.name || 'this person'}`} onClick={() => setPeople((cur) => cur.filter((_, j) => j !== i))}>✕</button>}
+              </div>
+            ))}
+            <button type="button" className="link-btn" onClick={() => setPeople((cur) => [...cur, { name: '', phone: '' }])}>+ Ask someone else too</button>
 
             <div className="field">
               <span className="field-title">Add a note (optional)</span>
@@ -102,30 +147,47 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
             </div>
             <TextField id="ask-note" label="Or write your own" value={note} onChange={setNote} />
 
-            {!settings.phone && (
+            {!settings.phone && !box && (
               <TextField id="ask-my-phone" label="Your mobile number, so they can text you back" type="tel" value={mine} onChange={setMine} placeholder="Your number" />
             )}
 
             <button type="button" className="link-btn" onClick={() => setShowMessage(!showMessage)}>{showMessage ? 'Hide the message' : 'See the message they’ll get'}</button>
-            {showMessage && <p className="message-preview">{message}</p>}
+            {showMessage && <p className="message-preview">{previewMsg}</p>}
 
-            <a className={`btn big ${ready ? '' : 'disabled'}`} aria-disabled={!ready} href={ready ? smsLink(phone, message) : undefined}
-              onClick={(e) => { if (!ready) { e.preventDefault(); return } record() }}>
-              <Icon name="share" size={20} /> Text {name.trim() || 'them'} the question
-            </a>
-            <button className="btn ghost" disabled={!ready} onClick={async () => { await record(); await shareMessage(message) }}>Send another way (WhatsApp, email…)</button>
-            <p className="muted small">They can type or talk their answer{box ? ', tap Send, and it shows up here' : ', and it comes back to you'} with their name on it.</p>
+            {filled.length <= 1 ? (
+              <a className={`btn big ${ready ? '' : 'disabled'}`} aria-disabled={!ready} href={ready ? smsLink(filled[0].phone, makeOne(filled[0]).message) : undefined}
+                onClick={async (e) => {
+                  if (!ready) { e.preventDefault(); return }
+                  // Save first, then open Messages with this person's own link.
+                  e.preventDefault()
+                  const [one] = await prepare()
+                  setSent([{ ...one, texted: true }])
+                  window.location.href = smsLink(one.ask.toPhone, one.message)
+                }}>
+                <Icon name="share" size={20} /> Text {filled[0]?.name.trim() || 'them'} the question
+              </a>
+            ) : (
+              <button className="btn big" disabled={!ready} onClick={prepare}><Icon name="share" size={20} /> Get texts ready for {filled.length} people</button>
+            )}
+            <p className="muted small">Each person gets their own link. They can type or talk their answer{box ? ', tap Submit, and it shows up here' : ', and it comes back to you'} with their name on it.</p>
           </>
         ) : (
           <>
-            <p className="ask-preview">“{ask.question}”</p>
-            <p className="success"><Icon name="check" size={16} /> Question saved. If your messages app didn’t open, send it another way below.</p>
-            <div className="row wrap">
-              <a className="btn secondary small" href={smsLink(phone, message)}>Open Messages again</a>
-              <button className="btn ghost small" onClick={() => shareMessage(message)}>Share…</button>
-              <button className="btn ghost small" onClick={async () => { try { await navigator.clipboard.writeText(message); setCopied(true) } catch { /* not allowed */ } }}>{copied ? 'Copied' : 'Copy message'}</button>
+            <p className="ask-preview">“{q.trim()}”</p>
+            {sent.length > 1 && <p className="muted small">Tap each person to open Messages with their own text.</p>}
+            <div className="stack">
+              {sent.map((it, i) => (
+                <div key={it.ask.id} className="send-row">
+                  <span>{it.texted ? <Icon name="check" size={16} /> : null} <strong>{it.ask.toName}</strong> <small className="muted">{it.ask.toPhone}</small></span>
+                  <div className="row wrap">
+                    <a className={`btn small ${it.texted ? 'ghost' : ''}`} href={smsLink(it.ask.toPhone, it.message)}
+                      onClick={() => setSent((cur) => cur!.map((x, j) => (j === i ? { ...x, texted: true } : x)))}>{it.texted ? 'Text again' : `Text ${it.ask.toName.split(' ')[0]}`}</a>
+                    <button className="btn ghost small" onClick={() => shareMessage(it.message)}>Share…</button>
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="muted small">{box ? `When ${name.trim()} sends an answer, it shows up the next time you open the app.` : `When ${name.trim()} answers, tap the link in their text and it’s added here automatically.`}</p>
+            <p className="muted small">{box ? 'When they answer, it shows up the next time you open the app.' : 'When they answer, tap the link in their text and it’s added here automatically.'}</p>
             <button className="btn" onClick={onClose}>Done</button>
           </>
         )}

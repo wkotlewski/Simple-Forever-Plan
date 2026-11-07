@@ -8,6 +8,8 @@ import { SuggestionList, useSuggestions } from '../components/Suggestions'
 import { TextField } from '../components/TextField'
 import { AskSheet, Contributions, Waiting } from '../components/AskSheet'
 import { personDrafts } from '../lib/drafts'
+import { BulkFamily } from '../components/BulkFamily'
+import { StoryMentions } from '../components/StoryMentions'
 
 const NODE_W = 116
 const CIRCLE_NAME = { family: 'Family', mentored: 'Someone I mentored', mentor: 'A mentor to me', friend: 'A friend' } as const
@@ -18,6 +20,7 @@ const LINK_LABEL: Record<Link, string> = { parent: 'Parent of', child: 'Child of
 export default function FamilyTree() {
   const { data, isOwner, session } = useData()
   const [open, setOpen] = useState<ID | 'new' | null>(null)
+  const [bulk, setBulk] = useState(false)
   // The tree shows family; mentees, mentors and friends are listed under People Who Mattered.
   const family = useMemo(() => data.people.filter((p) => !p.circle || p.circle === 'family'), [data.people])
   const others = data.people.filter((p) => p.circle && p.circle !== 'family')
@@ -47,10 +50,21 @@ export default function FamilyTree() {
 
       {isOwner && <SuggestionList items={found} title="People from your stories" />}
       {isOwner && <GapSuggestions />}
+      {isOwner && data.people.length > 0 && (
+        <button className="card bulk-card" onClick={() => setBulk(true)}>
+          <Icon name="mic" />
+          <span><strong>Add more family by talking or typing</strong><small className="muted">Or bring in a family tree file, document or recording</small></span>
+        </button>
+      )}
 
       {!family.length ? (
         <Empty icon="tree" title={isOwner ? 'Start your family tree' : 'No family tree yet'}>
-          {isOwner && <button className="btn" onClick={() => setOpen('new')}><Icon name="plus" size={18} /> Add yourself first</button>}
+          {isOwner && (
+            <div className="stack center-buttons">
+              <button className="btn big" onClick={() => setBulk(true)}><Icon name="mic" size={20} /> Tell me about your family</button>
+              <button className="btn ghost" onClick={() => setOpen('new')}><Icon name="plus" size={18} /> Add one person at a time</button>
+            </div>
+          )}
         </Empty>
       ) : (
         <div className="tree-wrap">
@@ -86,6 +100,8 @@ export default function FamilyTree() {
           </div>
         </section>
       )}
+
+      {bulk && <BulkFamily onClose={() => setBulk(false)} />}
 
       {open && (
         <PersonSheet
@@ -245,6 +261,7 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
           </div>
           {f.notes && <p className="notes">{f.notes}</p>}
           <Contributions items={person?.contributions} label="remembers" />
+          {person && !person.isSelf && <StoryMentions person={person} />}
           {isOwner && person && <Waiting asks={data.asks.filter((a) => !a.answeredAt && a.target?.kind === 'person' && a.target.personId === person.id)} />}
           {rel && Object.entries(rel).filter(([, ids]) => ids.length).map(([label, ids]) => (
             <div key={label} className="rel-row">

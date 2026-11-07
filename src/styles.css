@@ -240,6 +240,44 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); outline:
 .media-loading { height: 54px; border-radius: 12px; background: var(--line); opacity: .5; }
 
 /* Ask someone who knows */
+.recipient { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.recipient .icon-btn { margin-bottom: 6px; }
+.send-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line); }
+.send-row > span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--ok); }
+.send-row > span strong { color: var(--ink); }
+@media (max-width: 420px) { .recipient { grid-template-columns: 1fr auto; } .recipient > :nth-child(2) { grid-column: 1; } .recipient .icon-btn { grid-row: 1 / span 2; grid-column: 2; align-self: center; } }
+
+/* Add a whole family */
+.center-buttons { align-items: center; }
+.bulk-card { display: flex; gap: 14px; align-items: center; text-align: left; width: 100%; cursor: pointer; font: inherit; color: var(--brand); }
+.bulk-card span { display: flex; flex-direction: column; gap: 2px; color: var(--ink); }
+.bulk-card small { font-size: 15px; }
+.bulk-card > svg { flex: none; }
+.example summary { cursor: pointer; font-weight: 700; color: var(--brand); min-height: 40px; display: flex; align-items: center; }
+.example p { font-size: 16px; color: var(--ink-soft); padding: 10px 12px; border-radius: 12px; background: var(--bg); }
+.bring-in { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.review-person { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); }
+.review-person.off { opacity: .5; }
+.review-include { padding-top: 4px; }
+.review-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.review-body input { min-height: 44px; padding: 8px 12px; }
+.review-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--sage-soft); color: var(--brand); }
+.tag.new { background: var(--accent-soft); color: var(--accent); }
+.tag.you { background: var(--brand); color: var(--brand-ink); }
+.tag.quiet { background: var(--bg); color: var(--ink-soft); text-transform: none; letter-spacing: 0; }
+.tag.warn { background: var(--bg); color: var(--danger); }
+.review-years { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.same-as { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--ink-soft); }
+.same-as select { min-height: 40px; padding: 6px 10px; width: auto; flex: 1; }
+.review-link { align-items: flex-start; font-size: 16px; }
+.review-link.off { opacity: .45; }
+
+/* In your stories (on a person) */
+.mentions .label { color: var(--accent); }
+.mention { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--bg); }
+.mention p { font-family: var(--serif); font-size: 17px; }
+.link-btn.small { font-size: 14px; padding: 4px 0; }
 .field-title { font-weight: 700; font-size: 16px; }
 .draft-options { display: flex; flex-direction: column; gap: 6px; }
 .draft-option { text-align: left; padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--paper); font: inherit; font-size: 16px; cursor: pointer; color: var(--ink); }

@@ -30,7 +30,7 @@ export interface Ask {
   chapterId?: string
   questionId?: string
   /** For anything else: a medical item or family-history question, or a person on the tree. */
-  target?: { kind: 'medical'; itemId?: ID; category: MedicalCategory; title: string } | { kind: 'person'; personId: ID }
+  target?: { kind: 'medical'; itemId?: ID; category: MedicalCategory; title: string } | { kind: 'person'; personId: ID; field?: 'born' | 'died' }
   question: string
   toName: string
   toPhone: string

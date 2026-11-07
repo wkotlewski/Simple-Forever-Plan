@@ -6,6 +6,7 @@ import type { MedicalCategory, MedicalItem } from '../lib/types'
 import { Empty, FileButton, Icon, Media, ScreenHeader, Sheet } from '../components/ui'
 import { TextField } from '../components/TextField'
 import { AskSheet, Contributions, Waiting } from '../components/AskSheet'
+import { medicalDrafts, type Draft } from '../lib/drafts'
 
 export const MED_CATS: Record<MedicalCategory, { label: string; one: string; hint: string; tone: string }> = {
   allergy: { label: 'Allergies', one: 'Allergy', hint: 'What it is and what happens (e.g. penicillin — hives).', tone: 'red' },
@@ -33,12 +34,12 @@ const FAMILY_HISTORY: { title: string; question: string }[] = [
 const askAbout = (i: Pick<MedicalItem, 'category' | 'title'>) =>
   i.category === 'family'
     ? FAMILY_HISTORY.find((f) => f.title === i.title)?.question ?? `What do you know about ${i.title.toLowerCase()} in our family?`
-    : `Can you help me fill in my medical notes? ${MED_CATS[i.category].one}: ${i.title}. What do you know about it?`
+    : medicalDrafts(i)[0]?.text ?? `What do you know about ${i.title}?`
 
 export default function Medical() {
   const { data, isOwner } = useData()
   const [editing, setEditing] = useState<MedicalItem | MedicalCategory | null>(null)
-  const [asking, setAsking] = useState<{ question: string; target: NonNullable<import('../lib/types').Ask['target']> } | null>(null)
+  const [asking, setAsking] = useState<{ question: string; target: NonNullable<import('../lib/types').Ask['target']>; suggestions?: Draft[] } | null>(null)
   const items = data.medical
   const checklist = new Set(FAMILY_HISTORY.map((f) => f.title))
   const by = (c: MedicalCategory) => items.filter((i) => i.category === c && !(c === 'family' && checklist.has(i.title))).sort((a, b) => a.title.localeCompare(b.title))
@@ -81,6 +82,11 @@ export default function Medical() {
               {i.mediaIds.length > 0 && <div className="media-stack" onClick={(e) => e.stopPropagation()}>{i.mediaIds.map((m) => <Media key={m} id={m} />)}</div>}
               <Contributions items={i.contributions} label="added" />
               {isOwner && <Waiting asks={waitingFor(i)} />}
+              {isOwner && (
+                <button className="ask-chip no-print" onClick={(e) => { e.stopPropagation(); setAsking({ question: askAbout(i), suggestions: medicalDrafts(i), target: { kind: 'medical', itemId: i.id, category: i.category, title: i.title } }) }}>
+                  <Icon name="share" size={14} /> Ask family
+                </button>
+              )}
             </article>
           ))}
         </section>
@@ -119,8 +125,8 @@ export default function Medical() {
       <p className="disclaimer">This binder helps your family stay informed. It isn’t a medical record — always confirm medications and doses with a doctor or pharmacist.</p>
 
       {editing && <MedicalSheet item={typeof editing === 'string' ? null : editing} category={typeof editing === 'string' ? editing : editing.category} onClose={() => setEditing(null)}
-        onAsk={(it) => { setEditing(null); setAsking({ question: askAbout(it), target: { kind: 'medical', itemId: it.id, category: it.category, title: it.title } }) }} />}
-      {asking && <AskSheet question={asking.question} target={asking.target} onClose={() => setAsking(null)} />}
+        onAsk={(it) => { setEditing(null); setAsking({ question: askAbout(it), suggestions: medicalDrafts(it), target: { kind: 'medical', itemId: it.id, category: it.category, title: it.title } }) }} />}
+      {asking && <AskSheet question={asking.question} suggestions={asking.suggestions} target={asking.target} onClose={() => setAsking(null)} />}
     </div>
   )
 }

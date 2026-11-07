@@ -224,7 +224,7 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
       {!nested && (showMore || hasMoreAnswers) && q.followUps?.map((f, i) => (
         <QuestionCard key={followUpId(q.id, i)} chapterId={chapterId} question={{ id: followUpId(q.id, i), text: f }} onNext={onNext} nested />
       ))}
-      {asking && <AskSheet chapterId={chapterId} questionId={q.id} question={q.text} onClose={() => setAsking(false)} />}
+      {asking && <AskSheet chapterId={chapterId} questionId={q.id} question={q.text} suggestions={[`Do you remember? ${q.text}`, ...(q.followUps ?? [])]} onClose={() => setAsking(false)} />}
     </section>
   )
 }

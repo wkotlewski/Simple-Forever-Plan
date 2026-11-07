@@ -180,8 +180,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); outline:
 .text-field .field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .text-field label { font-weight: 700; font-size: 16px; }
 .field-box { position: relative; }
-.field-box input { padding-right: 52px; }
-.field-box textarea { padding-right: 52px; }
+.field-box.has-mic input, .field-box.has-mic textarea { padding-right: 52px; }
 .mic-btn { position: absolute; right: 6px; top: 6px; width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center;
   background: var(--sage-soft); color: var(--brand); cursor: pointer; }
 .mic-btn.on { background: var(--danger); color: #fff; animation: pulse 1.2s infinite; }
@@ -241,6 +240,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); outline:
 .media-loading { height: 54px; border-radius: 12px; background: var(--line); opacity: .5; }
 
 /* Ask someone who knows */
+.field-title { font-weight: 700; font-size: 16px; }
+.draft-options { display: flex; flex-direction: column; gap: 6px; }
+.draft-option { text-align: left; padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--paper); font: inherit; font-size: 16px; cursor: pointer; color: var(--ink); }
+.draft-option.on { border-color: var(--brand); background: var(--sage-soft); font-weight: 700; }
+.message-preview { white-space: pre-wrap; font-size: 15px; padding: 12px 14px; border-radius: 14px; background: var(--bg); border: 1px dashed var(--line); color: var(--ink-soft); overflow-wrap: anywhere; }
+.quick-asks { display: flex; flex-direction: column; gap: 6px; }
+.quick-asks .chip { text-align: left; min-height: 40px; height: auto; padding: 8px 14px; }
+.med-item .ask-chip { align-self: flex-start; }
 .ask-btn { align-self: stretch; }
 .family-answers { display: flex; flex-direction: column; gap: 10px; }
 .contribution { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); }

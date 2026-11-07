@@ -45,7 +45,7 @@ export function TextField({ id, label, value, onChange, multiline, rows = 4, pla
         <label htmlFor={id}>{label}</label>
         {onAsk && <button type="button" className="ask-chip" onClick={onAsk}><Icon name="share" size={14} /> Ask family</button>}
       </div>
-      <div className="field-box">
+      <div className={`field-box ${canTalk ? 'has-mic' : ''}`}>
         {multiline
           ? <textarea id={id} rows={rows} value={shown} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
           : <input id={id} type={type} inputMode={inputMode} value={shown} placeholder={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />}

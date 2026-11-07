@@ -7,6 +7,7 @@ import { Empty, FileButton, Icon, Media, ScreenHeader, Sheet } from '../componen
 import { SuggestionList, useSuggestions } from '../components/Suggestions'
 import { TextField } from '../components/TextField'
 import { AskSheet, Contributions, Waiting } from '../components/AskSheet'
+import { personDrafts } from '../lib/drafts'
 
 const NODE_W = 116
 const CIRCLE_NAME = { family: 'Family', mentored: 'Someone I mentored', mentor: 'A mentor to me', friend: 'A friend' } as const
@@ -135,7 +136,8 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
   const [linkType, setLinkType] = useState<Link>('child')
   const [linkTo, setLinkTo] = useState<ID>(data.people.find((p) => p.isSelf)?.id ?? data.people[0]?.id ?? '')
   const [editing, setEditing] = useState(isNew)
-  const [asking, setAsking] = useState(false)
+  const [asking, setAsking] = useState<boolean | string>(false)
+  const drafts = personDrafts(f, data.people, data.relations)
   const others = data.people.filter((p) => p.id !== f.id)
   const name = (id: ID) => data.people.find((p) => p.id === id)?.name ?? ''
 
@@ -171,8 +173,9 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
           </div>
           <TextField id="person-name" label="Full name" autoFocus value={f.name} onChange={(v) => setF({ ...f, name: v })} />
           <div className="grid2">
-            <label className="field"><span>Born</span><input value={f.born ?? ''} onChange={(e) => setF({ ...f, born: e.target.value })} placeholder="Year" inputMode="numeric" /></label>
-            <label className="field"><span>Passed</span><input value={f.died ?? ''} onChange={(e) => setF({ ...f, died: e.target.value })} placeholder="If applicable" inputMode="numeric" /></label>
+            <TextField id="person-born" label="Born" value={f.born ?? ''} onChange={(v) => setF({ ...f, born: v })} placeholder="Year or date"
+              onAsk={!isNew && f.name.trim() ? async () => { await save('people', { ...f, name: f.name.trim() }); setAsking(`What year and day was ${f.name.split(' ')[0]}’s birthday?`) } : undefined} />
+            <TextField id="person-died" label="Passed" value={f.died ?? ''} onChange={(v) => setF({ ...f, died: v })} placeholder="If applicable" />
           </div>
           <div className="field"><span>Who are they to you?</span>
             <div className="chips">{(Object.keys(CIRCLE_NAME) as (keyof typeof CIRCLE_NAME)[]).map((c) => (
@@ -229,12 +232,22 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
                 <button className="btn secondary" onClick={() => setEditing(true)}>Edit</button>
                 {!f.isSelf && <button className="btn ghost" onClick={() => setAsking(true)}><Icon name="share" size={16} /> Ask family about {f.name.split(' ')[0]}</button>}
               </div>
+              {!f.isSelf && (
+                <div className="quick-asks">
+                  <span className="label">Quick questions to send</span>
+                  <div className="chips">{drafts.slice(0, 4).map((d) => (
+                    <button key={d.text} className="chip" onClick={() => setAsking(d.text)}>{d.text}</button>
+                  ))}</div>
+                </div>
+              )}
+              <div>
+              </div>
             </>
           )}
         </div>
       )}
       {asking && (
-        <AskSheet question={`What do you remember about ${f.name.trim()}? Any stories, what they were like, where they lived?`}
+        <AskSheet question={(typeof asking === 'string' ? asking : drafts[0]?.text) ?? `What do you remember about ${f.name.trim()}?`} suggestions={drafts}
           target={{ kind: 'person', personId: f.id }} onClose={() => setAsking(false)} />
       )}
     </Sheet>

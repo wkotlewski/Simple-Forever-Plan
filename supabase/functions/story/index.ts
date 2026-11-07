@@ -4,7 +4,9 @@
 //
 // Set up in the Supabase dashboard: Edge Functions → Deploy a new function → Via Editor → name it "story",
 // paste this file, Deploy. Then turn OFF "Verify JWT" for it (the function checks the storyteller's
-// private key itself), and under Edge Functions → Secrets add ANTHROPIC_API_KEY.
+// private key itself), and under Edge Functions → Secrets add OPENAI_API_KEY.
+// Optional: OPENAI_MODEL to pick a different model (default gpt-5.5). An ANTHROPIC_API_KEY also works
+// instead of OpenAI; if both are set, OpenAI is used.
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -59,10 +61,31 @@ async function allowed(body: any, auth: string | null) {
   return 'Not allowed'
 }
 
-async function claude(system: string, content: string, maxTokens: number) {
+/** Sends the instructions and material to the AI writer and returns its text. */
+async function write(system: string, content: string, maxTokens: number) {
+  const openaiKey = Deno.env.get('OPENAI_API_KEY')
+  if (openaiKey) {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: Deno.env.get('OPENAI_MODEL') ?? 'gpt-5.5',
+        max_completion_tokens: maxTokens,
+        messages: [{ role: 'system', content: system }, { role: 'user', content }],
+      }),
+    })
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => ({})))?.error?.message ?? ''
+      throw new Error(res.status === 401 ? 'The OpenAI key is missing or wrong.' : res.status === 429 ? 'OpenAI says the account is out of credit or busy — check billing at platform.openai.com.' : `Story writer error (${res.status}). ${detail}`.trim())
+    }
+    const out = await res.json()
+    return String(out.choices?.[0]?.message?.content ?? '').trim()
+  }
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!anthropicKey) throw new Error('No AI key is set up yet. Add OPENAI_API_KEY under Edge Functions → Secrets.')
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-sonnet-5-5', max_tokens: maxTokens, system, messages: [{ role: 'user', content }] }),
   })
   if (!res.ok) throw new Error(res.status === 401 ? 'The Anthropic key is missing or wrong.' : `Story writer error (${res.status}).`)
@@ -85,7 +108,7 @@ Deno.serve(async (req) => {
     if (body.mode === 'summary') {
       const chapters = (body.chapters ?? []) as { title: string; answers: { question: string; text: string }[] }[]
       const text = chapters.map((c) => `## ${c.title}\n\n${material(c.answers)}`).join('\n\n')
-      const raw = await claude(SUMMARY, `The storyteller is ${name}.${correctionsBlock(body.corrections)}\n\nEverything they and their family have shared:\n\n${text}`, 3000)
+      const raw = await write(SUMMARY, `The storyteller is ${name}.${correctionsBlock(body.corrections)}\n\nEverything they and their family have shared:\n\n${text}`, 3000)
       const parsed = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1))
       return json({ overview: String(parsed.overview ?? ''), facts: (parsed.facts ?? []).map(String), unclear: (parsed.unclear ?? []).map(String) })
     }
@@ -95,7 +118,7 @@ Deno.serve(async (req) => {
     const voice = body.voice === 'third'
       ? `Write in the third person as a loving biography of ${name}.`
       : `Write in the first person, as ${name} telling it ("I").`
-    const prose = await claude(CHAPTER, `Chapter: "${body.chapterTitle}". ${voice}${correctionsBlock(body.corrections)}\n\nInterview answers:\n\n${material(answers)}`, 4000)
+    const prose = await write(CHAPTER, `Chapter: "${body.chapterTitle}". ${voice}${correctionsBlock(body.corrections)}\n\nInterview answers:\n\n${material(answers)}`, 4000)
     return json({ body: prose })
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500)

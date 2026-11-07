@@ -40,13 +40,13 @@ Lets relatives tap **Send** instead of texting their answer back. Plans still st
 2. SQL Editor → New query → paste [`supabase/inbox.sql`](supabase/inbox.sql) → Run.
 3. Put the Project URL and publishable (anon) key in `.env.production` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These are meant to be public; the script only lets relatives drop answers in, and only the storyteller's phone (which holds a private key) can read them.
 
-## Story writer and "Your story so far" (Supabase + Anthropic)
+## Story writer and "Your story so far" (Supabase + OpenAI)
 
 Turns answers into chapters that read like a loving eulogy — clear and smooth, never invented — and writes a life overview with a list of facts to confirm or fix (fixes are followed in every chapter). Rewrites keep earlier versions.
 
 1. After `inbox.sql`, also run [`supabase/writer.sql`](supabase/writer.sql) in the SQL Editor (a daily limit so no one else can use your key).
 2. Edge Functions → Deploy a new function → Via Editor → name `story` → paste [`supabase/functions/story/index.ts`](supabase/functions/story/index.ts) → Deploy. In the function's settings, turn **off** "Verify JWT" (it checks the storyteller's private key itself).
-3. Get an API key at [console.anthropic.com](https://console.anthropic.com) (add a little credit and set a monthly spend limit), then Edge Functions → Secrets → add `ANTHROPIC_API_KEY`.
+3. Get an API key at [platform.openai.com](https://platform.openai.com) (add a little credit and set a monthly budget), then Edge Functions → Secrets → add `OPENAI_API_KEY`. Optional: `OPENAI_MODEL` to use a different model (default `gpt-5.5`). An `ANTHROPIC_API_KEY` works instead, if you prefer Claude.
 
 ## Turn on family sharing across devices (Supabase accounts)
 

@@ -5,6 +5,8 @@ import { childrenOf, layoutTree, linkPeople, parentsOf, siblingsOf, spousesOf, t
 import type { ID, Person, Relation } from '../lib/types'
 import { Empty, FileButton, Icon, Media, ScreenHeader, Sheet } from '../components/ui'
 import { SuggestionList, useSuggestions } from '../components/Suggestions'
+import { TextField } from '../components/TextField'
+import { AskSheet, Contributions, Waiting } from '../components/AskSheet'
 
 const NODE_W = 116
 const CIRCLE_NAME = { family: 'Family', mentored: 'Someone I mentored', mentor: 'A mentor to me', friend: 'A friend' } as const
@@ -133,6 +135,7 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
   const [linkType, setLinkType] = useState<Link>('child')
   const [linkTo, setLinkTo] = useState<ID>(data.people.find((p) => p.isSelf)?.id ?? data.people[0]?.id ?? '')
   const [editing, setEditing] = useState(isNew)
+  const [asking, setAsking] = useState(false)
   const others = data.people.filter((p) => p.id !== f.id)
   const name = (id: ID) => data.people.find((p) => p.id === id)?.name ?? ''
 
@@ -166,7 +169,7 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
             <FileButton label={f.photoId ? 'Change photo' : 'Add photo'} accept="image/*" icon="camera"
               onFile={async (file) => { const id = await store.putMedia(file); setF((x) => ({ ...x, photoId: id })) }} />
           </div>
-          <label className="field"><span>Full name</span><input autoFocus value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
+          <TextField id="person-name" label="Full name" autoFocus value={f.name} onChange={(v) => setF({ ...f, name: v })} />
           <div className="grid2">
             <label className="field"><span>Born</span><input value={f.born ?? ''} onChange={(e) => setF({ ...f, born: e.target.value })} placeholder="Year" inputMode="numeric" /></label>
             <label className="field"><span>Passed</span><input value={f.died ?? ''} onChange={(e) => setF({ ...f, died: e.target.value })} placeholder="If applicable" inputMode="numeric" /></label>
@@ -177,7 +180,7 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
             ))}</div>
           </div>
           {f.circle && f.circle !== 'family' && (
-            <label className="field"><span>In your words</span><input id="person-relation" value={f.relation ?? ''} onChange={(e) => setF({ ...f, relation: e.target.value })} placeholder="e.g. Apprentice at the shop" /></label>
+            <TextField id="person-relation" label="In your words" value={f.relation ?? ''} onChange={(v) => setF({ ...f, relation: v })} placeholder="e.g. Apprentice at the shop" />
           )}
           {isNew && others.length > 0 && (!f.circle || f.circle === 'family') && (
             <div className="grid2">
@@ -193,9 +196,8 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
               </label>
             </div>
           )}
-          <label className="field"><span>Notes</span>
-            <textarea rows={4} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Where they lived, what they were like, a story about them…" />
-          </label>
+          <TextField id="person-notes" multiline label="Notes" value={f.notes} onChange={(v) => setF({ ...f, notes: v })} placeholder="Where they lived, what they were like, a story about them…"
+            onAsk={!isNew && f.name.trim() ? async () => { await save('people', { ...f, name: f.name.trim() }); setAsking(true) } : undefined} />
           <div className="row between">
             <button className="btn" disabled={!f.name.trim()}>Save</button>
             {!isNew && <button type="button" className="btn ghost danger-text" onClick={del}><Icon name="trash" size={18} /> Remove</button>}
@@ -212,6 +214,8 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
             </div>
           </div>
           {f.notes && <p className="notes">{f.notes}</p>}
+          <Contributions items={person?.contributions} label="remembers" />
+          {isOwner && person && <Waiting asks={data.asks.filter((a) => !a.answeredAt && a.target?.kind === 'person' && a.target.personId === person.id)} />}
           {rel && Object.entries(rel).filter(([, ids]) => ids.length).map(([label, ids]) => (
             <div key={label} className="rel-row">
               <span className="label">{label}</span>
@@ -221,10 +225,17 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
           {isOwner && (
             <>
               <ConnectRow person={f} others={others} onConnect={connect} />
-              <button className="btn secondary" onClick={() => setEditing(true)}>Edit</button>
+              <div className="row wrap">
+                <button className="btn secondary" onClick={() => setEditing(true)}>Edit</button>
+                {!f.isSelf && <button className="btn ghost" onClick={() => setAsking(true)}><Icon name="share" size={16} /> Ask family about {f.name.split(' ')[0]}</button>}
+              </div>
             </>
           )}
         </div>
+      )}
+      {asking && (
+        <AskSheet question={`What do you remember about ${f.name.trim()}? Any stories, what they were like, where they lived?`}
+          target={{ kind: 'person', personId: f.id }} onClose={() => setAsking(false)} />
       )}
     </Sheet>
   )

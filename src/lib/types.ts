@@ -26,8 +26,11 @@ export interface Contribution {
 /** A question sent to a relative by text, waiting for (or holding) their reply. */
 export interface Ask {
   id: ID
-  chapterId: string
-  questionId: string
+  /** For story questions. */
+  chapterId?: string
+  questionId?: string
+  /** For anything else: a medical item or family-history question, or a person on the tree. */
+  target?: { kind: 'medical'; itemId?: ID; category: MedicalCategory; title: string } | { kind: 'person'; personId: ID }
   question: string
   toName: string
   toPhone: string
@@ -60,6 +63,8 @@ export interface Person {
   circle?: 'family' | 'mentored' | 'mentor' | 'friend'
   /** In their words, e.g. "Brother", "Apprentice at the shop", "My first boss". */
   relation?: string
+  /** What relatives shared about this person when asked. */
+  contributions?: Contribution[]
 }
 
 /** parent: `from` is a parent of `to`. spouse: partners, either direction. */
@@ -78,6 +83,7 @@ export type MedicalCategory =
   | 'history'
   | 'insurance'
   | 'wishes'
+  | 'family'
 
 export interface MedicalItem {
   id: ID
@@ -90,6 +96,8 @@ export interface MedicalItem {
   phone?: string
   mediaIds: ID[]
   createdAt: number
+  /** Answers relatives sent back when asked about this. */
+  contributions?: Contribution[]
 }
 
 export type MessageKind = 'scripture' | 'song' | 'quote' | 'advice' | 'letter'

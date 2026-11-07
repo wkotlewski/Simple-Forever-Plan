@@ -4,6 +4,8 @@ import { useRecorder, clock, canRecord } from '../lib/recorder'
 import { uid } from '../lib/store'
 import type { MedicalCategory, MedicalItem } from '../lib/types'
 import { Empty, FileButton, Icon, Media, ScreenHeader, Sheet } from '../components/ui'
+import { TextField } from '../components/TextField'
+import { AskSheet, Contributions, Waiting } from '../components/AskSheet'
 
 export const MED_CATS: Record<MedicalCategory, { label: string; one: string; hint: string; tone: string }> = {
   allergy: { label: 'Allergies', one: 'Allergy', hint: 'What it is and what happens (e.g. penicillin — hives).', tone: 'red' },
@@ -13,14 +15,35 @@ export const MED_CATS: Record<MedicalCategory, { label: string; one: string; hin
   history: { label: 'Medical History', one: 'History item', hint: 'Surgeries, hospital stays, doctor’s notes and test results.', tone: 'violet' },
   insurance: { label: 'Insurance & Documents', one: 'Document', hint: 'Insurance cards, Medicare, power of attorney. Keep this plan private.', tone: 'slate' },
   wishes: { label: 'Care Wishes', one: 'Care wish', hint: 'Advance directive, end-of-life wishes, what comforts you.', tone: 'rose' },
+  family: { label: 'Family Health History', one: 'Family history', hint: 'Conditions that run in the family — who had them and about what age. Doctors often ask.', tone: 'violet' },
 }
-const ORDER: MedicalCategory[] = ['allergy', 'medication', 'condition', 'doctor', 'history', 'insurance', 'wishes']
+const ORDER: MedicalCategory[] = ['allergy', 'medication', 'condition', 'doctor', 'history', 'insurance', 'wishes', 'family']
+
+/** What doctors usually ask about family health history. Each can be answered here or asked of a relative. */
+const FAMILY_HISTORY: { title: string; question: string }[] = [
+  { title: 'Heart disease', question: 'Has anyone in our family had heart disease, a heart attack, or heart surgery? Who, and about what age?' },
+  { title: 'High blood pressure or cholesterol', question: 'Who in our family has had high blood pressure or high cholesterol?' },
+  { title: 'Stroke', question: 'Has anyone in our family had a stroke? Who, and about what age?' },
+  { title: 'Diabetes', question: 'Has anyone in our family had diabetes? Who, and what type if you know?' },
+  { title: 'Cancer', question: 'Has anyone in our family had cancer? What kind, who, and about what age?' },
+  { title: 'Memory loss or Alzheimer’s', question: 'Has anyone in our family had Alzheimer’s, dementia, or memory problems as they got older?' },
+  { title: 'Mental health', question: 'Has anyone in our family lived with depression, anxiety, or another mental health condition?' },
+  { title: 'Anything else that runs in the family', question: 'Are there any other health conditions doctors said run in our family?' },
+]
+const askAbout = (i: Pick<MedicalItem, 'category' | 'title'>) =>
+  i.category === 'family'
+    ? FAMILY_HISTORY.find((f) => f.title === i.title)?.question ?? `What do you know about ${i.title.toLowerCase()} in our family?`
+    : `Can you help me fill in my medical notes? ${MED_CATS[i.category].one}: ${i.title}. What do you know about it?`
 
 export default function Medical() {
   const { data, isOwner } = useData()
   const [editing, setEditing] = useState<MedicalItem | MedicalCategory | null>(null)
+  const [asking, setAsking] = useState<{ question: string; target: NonNullable<import('../lib/types').Ask['target']> } | null>(null)
   const items = data.medical
-  const by = (c: MedicalCategory) => items.filter((i) => i.category === c).sort((a, b) => a.title.localeCompare(b.title))
+  const checklist = new Set(FAMILY_HISTORY.map((f) => f.title))
+  const by = (c: MedicalCategory) => items.filter((i) => i.category === c && !(c === 'family' && checklist.has(i.title))).sort((a, b) => a.title.localeCompare(b.title))
+  const waitingFor = (i: Pick<MedicalItem, 'category' | 'title'> & { id?: string }) =>
+    data.asks.filter((a) => !a.answeredAt && a.target?.kind === 'medical' && (a.target.itemId === i.id || (a.target.category === i.category && a.target.title === i.title)))
 
   return (
     <div className="screen">
@@ -56,14 +79,48 @@ export default function Medical() {
               {i.prescriber && <p className="muted small">Prescribed by {i.prescriber}</p>}
               {i.phone && <a className="chip" href={`tel:${i.phone}`} onClick={(e) => e.stopPropagation()}>Call {i.phone}</a>}
               {i.mediaIds.length > 0 && <div className="media-stack" onClick={(e) => e.stopPropagation()}>{i.mediaIds.map((m) => <Media key={m} id={m} />)}</div>}
+              <Contributions items={i.contributions} label="added" />
+              {isOwner && <Waiting asks={waitingFor(i)} />}
             </article>
           ))}
         </section>
       ))}
 
+      <section className="med-section">
+        <h3 className="med-label tone-violet">Family Health History</h3>
+        <p className="muted small">Doctors often ask about these. Answer what you know, or ask a relative who might remember.</p>
+        {FAMILY_HISTORY.map((f) => {
+          const item = items.find((i) => i.category === 'family' && i.title === f.title)
+          const answered = item && (item.details || item.contributions?.length || item.mediaIds.length)
+          if (!isOwner && !answered) return null
+          return (
+            <article key={f.title} className={`card med-item history-q ${answered ? 'answered' : ''}`}>
+              <div className="med-head"><strong>{f.title}</strong>{answered && <Icon name="check" size={18} />}</div>
+              {!answered && <p className="muted small">{f.question}</p>}
+              {item?.details && <p>{item.details}</p>}
+              {item && item.mediaIds.length > 0 && <div className="media-stack">{item.mediaIds.map((m) => <Media key={m} id={m} />)}</div>}
+              <Contributions items={item?.contributions} label="added" />
+              {isOwner && <Waiting asks={waitingFor({ id: item?.id, category: 'family', title: f.title })} />}
+              {isOwner && (
+                <div className="row wrap no-print">
+                  <button className="btn secondary small" onClick={() => setEditing(item ?? { id: uid(), category: 'family', title: f.title, details: '', mediaIds: [], createdAt: Date.now() })}>
+                    <Icon name={item?.details ? 'type' : 'mic'} size={16} /> {item?.details ? 'Edit' : 'Answer'}
+                  </button>
+                  <button className="btn ghost small" onClick={() => setAsking({ question: f.question, target: { kind: 'medical', itemId: item?.id, category: 'family', title: f.title } })}>
+                    <Icon name="share" size={16} /> Ask family
+                  </button>
+                </div>
+              )}
+            </article>
+          )
+        })}
+      </section>
+
       <p className="disclaimer">This binder helps your family stay informed. It isn’t a medical record — always confirm medications and doses with a doctor or pharmacist.</p>
 
-      {editing && <MedicalSheet item={typeof editing === 'string' ? null : editing} category={typeof editing === 'string' ? editing : editing.category} onClose={() => setEditing(null)} />}
+      {editing && <MedicalSheet item={typeof editing === 'string' ? null : editing} category={typeof editing === 'string' ? editing : editing.category} onClose={() => setEditing(null)}
+        onAsk={(it) => { setEditing(null); setAsking({ question: askAbout(it), target: { kind: 'medical', itemId: it.id, category: it.category, title: it.title } }) }} />}
+      {asking && <AskSheet question={asking.question} target={asking.target} onClose={() => setAsking(null)} />}
     </div>
   )
 }
@@ -83,7 +140,7 @@ function EmergencyCard({ allergies, meds, doctors }: { allergies: MedicalItem[];
   )
 }
 
-function MedicalSheet({ item, category, onClose }: { item: MedicalItem | null; category: MedicalCategory; onClose: () => void }) {
+function MedicalSheet({ item, category, onClose, onAsk }: { item: MedicalItem | null; category: MedicalCategory; onClose: () => void; onAsk: (i: MedicalItem) => void }) {
   const { save, remove, store } = useData()
   const [f, setF] = useState<MedicalItem>(item ?? { id: uid(), category, title: '', details: '', mediaIds: [], createdAt: Date.now() })
   const [busy, setBusy] = useState(false)
@@ -122,22 +179,27 @@ function MedicalSheet({ item, category, onClose }: { item: MedicalItem | null; c
         </div>
         {f.mediaIds.length > 0 && <div className="media-stack">{f.mediaIds.map((m) => <Media key={m} id={m} />)}</div>}
 
-        <label className="field"><span>{f.category === 'doctor' ? 'Name & role' : 'Name'}</span>
-          <input value={f.title} onChange={(e) => set('title', e.target.value)} placeholder={f.category === 'medication' ? 'e.g. Lisinopril' : f.category === 'doctor' ? 'e.g. Dr. Patel, cardiologist' : ''} />
-        </label>
+        <TextField id="med-title" label={f.category === 'doctor' ? 'Name & role' : f.category === 'family' ? 'Condition' : 'Name'} value={f.title} onChange={(v) => set('title', v)}
+          placeholder={f.category === 'medication' ? 'e.g. Lisinopril' : f.category === 'doctor' ? 'e.g. Dr. Patel, cardiologist' : ''} />
         {f.category === 'medication' && (
           <div className="grid2">
-            <label className="field"><span>Dose</span><input value={f.dosage ?? ''} onChange={(e) => set('dosage', e.target.value)} placeholder="10 mg" /></label>
-            <label className="field"><span>When</span><input value={f.schedule ?? ''} onChange={(e) => set('schedule', e.target.value)} placeholder="Every morning" /></label>
-            <label className="field full"><span>Prescribed by</span><input value={f.prescriber ?? ''} onChange={(e) => set('prescriber', e.target.value)} /></label>
+            <TextField id="med-dose" label="Dose" value={f.dosage ?? ''} onChange={(v) => set('dosage', v)} placeholder="10 mg" />
+            <TextField id="med-when" label="When" value={f.schedule ?? ''} onChange={(v) => set('schedule', v)} placeholder="Every morning" />
+            <div className="full"><TextField id="med-prescriber" label="Prescribed by" value={f.prescriber ?? ''} onChange={(v) => set('prescriber', v)} /></div>
           </div>
         )}
         {f.category === 'doctor' && (
-          <label className="field"><span>Phone</span><input type="tel" value={f.phone ?? ''} onChange={(e) => set('phone', e.target.value)} /></label>
+          <TextField id="med-phone" label="Phone" type="tel" value={f.phone ?? ''} onChange={(v) => set('phone', v)} />
         )}
-        <label className="field"><span>What your family should know</span>
-          <textarea rows={4} value={f.details} onChange={(e) => set('details', e.target.value)} placeholder="In plain words — what it’s for, what to watch for, anything that helps." />
-        </label>
+        <TextField id="med-details" multiline label={f.category === 'family' ? 'Who had it, and about what age' : 'What your family should know'} value={f.details} onChange={(v) => set('details', v)}
+          placeholder={f.category === 'family' ? 'e.g. My father had a heart attack at 62; his brother had bypass surgery.' : 'In plain words — what it’s for, what to watch for, anything that helps.'}
+          onAsk={f.title.trim() ? async () => {
+            // Keep anything already typed, then ask.
+            const kept = { ...f, title: f.title.trim() }
+            if (kept.details.trim() || kept.mediaIds.length || item) await save('medical', kept)
+            onAsk(kept)
+          } : undefined} />
+        <Contributions items={f.contributions} label="added" />
         <div className="row between">
           <button className="btn" disabled={busy}>Save</button>
           {item && <button type="button" className="btn ghost danger-text" onClick={async () => { await remove('medical', item.id); onClose() }}><Icon name="trash" size={18} /> Delete</button>}

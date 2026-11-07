@@ -3,11 +3,13 @@ import { ensureInbox, inboxAvailable } from '../lib/inbox'
 import { useData } from '../lib/data'
 import { askMessage, findReply, shareMessage, smsLink, type ReplyPayload } from '../lib/ask'
 import { uid } from '../lib/store'
-import type { Ask } from '../lib/types'
-import { Icon, Sheet } from './ui'
+import type { Ask, Contribution } from '../lib/types'
+import { Icon, Media, Sheet } from './ui'
 
 /** Text one question to a relative who might remember more about it. */
-export function AskSheet({ chapterId, questionId, question, onClose }: { chapterId: string; questionId: string; question: string; onClose: () => void }) {
+export function AskSheet({ chapterId, questionId, target, question, onClose }: {
+  chapterId?: string; questionId?: string; target?: Ask['target']; question: string; onClose: () => void
+}) {
   const { save, settings, session } = useData()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -27,7 +29,7 @@ export function AskSheet({ chapterId, questionId, question, onClose }: { chapter
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const ready = name.trim() && phone.replace(/\D/g, '').length >= 7 && !preparing
-  const ask: Ask = { id: sent?.id ?? uid(), chapterId, questionId, question, toName: name.trim(), toPhone: phone.trim(), note: note.trim() || undefined, sentAt: Date.now() }
+  const ask: Ask = { id: sent?.id ?? uid(), chapterId, questionId, target, question, toName: name.trim(), toPhone: phone.trim(), note: note.trim() || undefined, sentAt: Date.now() }
   const message = askMessage({ v: 1, id: ask.id, q: question, from: settings.storytellerName || session.name, to: ask.toName, note: ask.note, reply: mine.trim() || undefined, box })
 
   async function record() {
@@ -88,21 +90,36 @@ export function ReplySheet({ reply, audio: sentAudio, onAdded, onClose }: { repl
   const [text, setText] = useState(reply.text)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
-  const already = data.answers.some((a) => a.contributions?.some((c) => c.id === reply.id))
+  const already = [...data.answers, ...data.medical, ...data.people].some((a) => a.contributions?.some((c) => c.id === reply.id))
   const first = reply.from.split(' ')[0]
 
   async function add() {
     setBusy(true)
-    const chapterId = ask?.chapterId ?? 'roots'
-    const questionId = ask?.questionId ?? `asked-${reply.id}`
-    const existing = data.answers.find((a) => a.questionId === questionId)
-    const mediaIds = audio ? [await store.putMedia(audio)] : []
+    const target = ask?.target
+    const scope = target?.kind === 'medical' ? 'medical' : undefined
+    const mediaIds = audio ? [await store.putMedia(audio, scope)] : []
     const contribution = { id: reply.id, from: reply.from, text: text.trim(), mediaIds, addedAt: Date.now() }
-    await save('answers', {
-      id: existing?.id ?? uid(), chapterId, questionId, question: ask?.question ?? reply.q,
-      text: existing?.text ?? '', mediaIds: existing?.mediaIds ?? [], createdAt: existing?.createdAt ?? Date.now(),
-      contributions: [...(existing?.contributions ?? []).filter((c) => c.id !== reply.id), contribution],
-    })
+    const merge = (list?: Contribution[]) => [...(list ?? []).filter((c) => c.id !== reply.id), contribution]
+
+    if (target?.kind === 'medical') {
+      // Goes onto the medical item it was about (created if it doesn't exist yet, e.g. a family-history question).
+      const item = data.medical.find((m) => m.id === target.itemId) ?? data.medical.find((m) => m.category === target.category && m.title === target.title)
+      await save('medical', item
+        ? { ...item, contributions: merge(item.contributions) }
+        : { id: target.itemId ?? uid(), category: target.category, title: target.title, details: '', mediaIds: [], createdAt: Date.now(), contributions: [contribution] })
+    } else if (target?.kind === 'person') {
+      const person = data.people.find((p) => p.id === target.personId)
+      if (person) await save('people', { ...person, contributions: merge(person.contributions) })
+    } else {
+      const chapterId = ask?.chapterId ?? 'roots'
+      const questionId = ask?.questionId ?? `asked-${reply.id}`
+      const existing = data.answers.find((a) => a.questionId === questionId)
+      await save('answers', {
+        id: existing?.id ?? uid(), chapterId, questionId, question: ask?.question ?? reply.q,
+        text: existing?.text ?? '', mediaIds: existing?.mediaIds ?? [], createdAt: existing?.createdAt ?? Date.now(),
+        contributions: merge(existing?.contributions),
+      })
+    }
     if (ask) await save('asks', { ...ask, answeredAt: Date.now() })
     onAdded?.()
     setBusy(false)
@@ -114,7 +131,11 @@ export function ReplySheet({ reply, audio: sentAudio, onAdded, onClose }: { repl
       {done ? (
         <div className="stack center-text">
           <Icon name="heart" size={32} />
-          <p>{first}’s memory is now part of your story. It will be included when you write that chapter.</p>
+          <p>{ask?.target?.kind === 'medical'
+            ? `${first}’s answer is saved in your Medical Binder${ask.target.category === 'family' ? ' under Family Health History' : ''}.`
+            : ask?.target?.kind === 'person'
+              ? `${first}’s memories are saved with ${data.people.find((p) => p.id === (ask.target as any).personId)?.name ?? 'that person'} on your family tree.`
+              : `${first}’s memory is now part of your story. It will be included when you write that chapter.`}</p>
           <button className="btn" onClick={onClose}>Done</button>
         </div>
       ) : (
@@ -163,4 +184,26 @@ export function PasteReply({ onReply }: { onReply: (r: ReplyPayload) => void }) 
       </div>
     </div>
   )
+}
+
+/** What relatives shared when asked, shown with their name (and voice, if they sent a recording). */
+export function Contributions({ items, label = 'remembers' }: { items?: Contribution[]; label?: string }) {
+  if (!items?.length) return null
+  return (
+    <div className="family-answers">
+      {items.map((c) => (
+        <div key={c.id} className="contribution" onClick={(e) => e.stopPropagation()}>
+          <p className="label">{c.from} {label}</p>
+          {c.text && <p className="answer-text">{c.text}</p>}
+          {c.mediaIds.map((m) => <Media key={m} id={m} />)}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Questions sent to relatives that haven't been answered yet. */
+export function Waiting({ asks }: { asks: Ask[] }) {
+  if (!asks.length) return null
+  return <>{asks.map((a) => <p key={a.id} className="waiting"><span className="pulse-dot" /> Asked {a.toName} · waiting for an answer</p>)}</>
 }

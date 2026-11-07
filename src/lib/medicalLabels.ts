@@ -8,4 +8,5 @@ export const MED_LABELS: Record<MedicalCategory, string> = {
   history: 'Medical History',
   insurance: 'Insurance & Documents',
   wishes: 'Care Wishes',
+  family: 'Family Health History',
 }

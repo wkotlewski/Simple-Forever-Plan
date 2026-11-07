@@ -6,6 +6,7 @@ import { uid } from '../lib/store'
 import type { KeepsakeMessage, MessageKind } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader, Sheet } from '../components/ui'
 import { SuggestionList, useSuggestions } from '../components/Suggestions'
+import { TextField } from '../components/TextField'
 
 const KINDS: Record<MessageKind, { label: string; source: string }> = {
   scripture: { label: 'Scripture', source: 'Book, chapter and verse (e.g. Psalm 23:4)' },
@@ -93,18 +94,15 @@ function MessageSheet({ item, onClose }: { item: KeepsakeMessage | null; onClose
             <button type="button" key={k} className={f.kind === k ? 'on' : ''} onClick={() => setF({ ...f, kind: k })}>{KINDS[k].label}</button>
           ))}
         </div>
-        <label className="field"><span>{f.kind === 'scripture' ? 'The verse' : f.kind === 'song' ? 'Song title' : f.kind === 'quote' ? 'The quote' : 'Your message'}</span>
-          <textarea rows={5} autoFocus value={f.text} onChange={(e) => setF({ ...f, text: e.target.value })} />
-        </label>
+        <TextField id="keep-text" multiline rows={f.kind === 'song' ? 1 : 5} autoFocus label={f.kind === 'scripture' ? 'The verse' : f.kind === 'song' ? 'Song title' : f.kind === 'quote' ? 'The quote' : 'Your message'}
+          value={f.text} onChange={(v) => setF({ ...f, text: v })} />
         {KINDS[f.kind].source && (
-          <label className="field"><span>{KINDS[f.kind].source}</span><input value={f.source ?? ''} onChange={(e) => setF({ ...f, source: e.target.value })} /></label>
+          <TextField id="keep-source" label={KINDS[f.kind].source} value={f.source ?? ''} onChange={(v) => setF({ ...f, source: v })} />
         )}
         {(f.kind === 'song' || f.kind === 'scripture' || f.note) && (
-          <label className="field"><span>Why it matters (optional)</span>
-            <textarea id="keep-note" rows={3} value={f.note ?? ''} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="When it came into your life, what it means to you…" />
-          </label>
+          <TextField id="keep-note" multiline rows={3} label="Why it matters (optional)" value={f.note ?? ''} onChange={(v) => setF({ ...f, note: v })} placeholder="When it came into your life, what it means to you…" />
         )}
-        <label className="field"><span>For someone special? (optional)</span><input value={f.forWhom ?? ''} onChange={(e) => setF({ ...f, forWhom: e.target.value })} placeholder="Everyone" /></label>
+        <TextField id="keep-for" label="For someone special? (optional)" value={f.forWhom ?? ''} onChange={(v) => setF({ ...f, forWhom: v })} placeholder="Everyone" />
         <div className="field"><span>Open when…</span>
           <div className="chips">{OCCASIONS.map((o) => (
             <button type="button" key={o} className={`chip ${f.occasions.includes(o) ? 'on' : ''}`} onClick={() => toggle(o)}>{o}</button>

@@ -6,6 +6,7 @@ import { uid } from '../lib/store'
 import type { Answer } from '../lib/types'
 import { FileButton, Icon, Media, ScreenHeader } from '../components/ui'
 import { AskSheet } from '../components/AskSheet'
+import { TextField } from '../components/TextField'
 import { SuggestionList, useSuggestions } from '../components/Suggestions'
 
 const KEEPSAKE_OCCASION: Record<string, string> = { scripture: 'Hard days', advice: 'Hard days', quote: 'Anytime', letter: 'Anytime' }
@@ -147,10 +148,9 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
       {mode && rec.state !== 'recording' && (
         <div className="draft">
           {pendingMedia.length > 0 && <div className="media-stack">{pendingMedia.map((m) => <Media key={m} id={m} />)}</div>}
-          <label className="field">
-            <span>{mode === 'write' ? 'Your answer' : canTranscribe ? 'What you said (fix anything that came out wrong)' : 'Write a few words about what you shared so it can go in your story'}</span>
-            <textarea rows={6} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus={mode === 'write'} placeholder="Write as much or as little as you like…" />
-          </label>
+          <TextField id="answer-draft" multiline rows={6} autoFocus={mode === 'write'} value={draft} onChange={setDraft}
+            label={mode === 'write' ? 'Your answer — type, or tap the microphone and talk' : canTranscribe ? 'What you said (fix anything that came out wrong)' : 'Write a few words about what you shared so it can go in your story'}
+            placeholder="Write as much or as little as you like…" />
           {q.keepsake && !followUp && (
             <label className="check"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Also save this in Words to Keep</label>
           )}

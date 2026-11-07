@@ -5,6 +5,7 @@ import { ensureInbox } from '../lib/inbox'
 import { CHAPTERS } from '../lib/questions'
 import type { LifeSummary } from '../lib/types'
 import { Icon, ScreenHeader } from '../components/ui'
+import { TextField } from '../components/TextField'
 import { ReadAloud } from './Story'
 
 const norm = (s: string) => s.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim()
@@ -21,6 +22,7 @@ export default function Summary({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState('')
   const [fixing, setFixing] = useState<number | null>(null)
   const [fixText, setFixText] = useState('')
+  const [replies, setReplies] = useState<Record<number, string>>({})
   const name = settings.storytellerName || session.name
 
   const chapters = CHAPTERS.map((c) => ({
@@ -115,7 +117,7 @@ export default function Summary({ onBack }: { onBack: () => void }) {
                   {fixing === i ? (
                     <div className="stack">
                       <p className="fact-old">{f.text}</p>
-                      <input id={`fix-${i}`} autoFocus value={fixText} onChange={(e) => setFixText(e.target.value)} placeholder="What’s actually true?" />
+                      <TextField id={`fix-${i}`} label="What’s actually true?" autoFocus value={fixText} onChange={setFixText} />
                       <div className="row">
                         <button className="btn small" disabled={!fixText.trim()} onClick={() => { setFact(i, { ...f, status: 'fixed', correction: fixText.trim() }); setFixing(null) }}>Save fix</button>
                         <button className="btn ghost small" onClick={() => setFixing(null)}>Cancel</button>
@@ -142,12 +144,15 @@ export default function Summary({ onBack }: { onBack: () => void }) {
               <h3>A few questions for you</h3>
               <p className="muted small">Things that weren’t clear or seemed to disagree. Answer any you like.</p>
               {summary.unclear.map((u, i) => (
-                <label key={i} className="field question-unclear">
-                  <span>{u.question}</span>
-                  <textarea id={`unclear-${i}`} rows={2} defaultValue={u.answer ?? ''} placeholder="Your answer (optional)"
-                    onBlur={(e) => e.target.value.trim() !== (u.answer ?? '') && update({ unclear: summary.unclear.map((x, j) => (j === i ? { ...x, answer: e.target.value.trim() } : x)) })} />
-                </label>
+                <TextField key={i} id={`unclear-${i}`} multiline rows={2} label={u.question} placeholder="Your answer (optional)"
+                  value={replies[i] ?? u.answer ?? ''} onChange={(v) => setReplies((r) => ({ ...r, [i]: v }))} />
               ))}
+              {Object.keys(replies).length > 0 && (
+                <button className="btn" onClick={async () => {
+                  await update({ unclear: summary.unclear.map((x, j) => (replies[j] !== undefined ? { ...x, answer: replies[j].trim() } : x)) })
+                  setReplies({})
+                }}>Save my answers</button>
+              )}
             </section>
           )}
         </>

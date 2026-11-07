@@ -59,6 +59,12 @@ export function planSections(data: Data, name: string, opts: { medical: boolean;
       paragraphs: data.medical.map((m) => [
         `${MED_LABELS[m.category]}: ${m.title}${m.dosage ? ` — ${m.dosage}` : ''}${m.schedule ? ` (${m.schedule})` : ''}`,
         m.details, m.prescriber ? `Prescribed by ${m.prescriber}` : '', m.phone ? `Phone: ${m.phone}` : '', ...memories(m.contributions),
+        ...(m.docSummaries ?? []).map((d) => [
+          `Document summary: ${d.summary}`,
+          d.concerns.length ? `Worth a closer look: ${d.concerns.join('; ')}` : '',
+          d.good.length ? `Looks good: ${d.good.join('; ')}` : '',
+          d.questions.length ? `Questions for the doctor: ${d.questions.join(' ')}` : '',
+        ].filter(Boolean).join('\n')),
       ].filter(Boolean).join('\n')),
     })
   }

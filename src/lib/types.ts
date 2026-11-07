@@ -12,6 +12,20 @@ export interface Answer {
   createdAt: number
   /** What other family members added when asked about this question. */
   contributions?: Contribution[]
+  /** Summaries of photos or files attached here (letters, certificates…). */
+  docSummaries?: DocSummary[]
+}
+
+/** A plain-language summary of one uploaded document, written with the person's own AI app and pasted back. */
+export interface DocSummary {
+  mediaId: ID
+  summary: string
+  details: string[]
+  /** Medical: things worth a closer look (out of range, new, follow-ups). Other documents: highlights. */
+  concerns: string[]
+  good: string[]
+  questions: string[]
+  at: number
 }
 
 /** An answer someone else sent back after being asked about one question. */
@@ -100,6 +114,8 @@ export interface MedicalItem {
   createdAt: number
   /** Answers relatives sent back when asked about this. */
   contributions?: Contribution[]
+  /** Summaries of the attached documents (lab results, discharge papers, prescriptions…). */
+  docSummaries?: DocSummary[]
 }
 
 export type MessageKind = 'scripture' | 'song' | 'quote' | 'advice' | 'letter'

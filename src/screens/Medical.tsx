@@ -5,6 +5,8 @@ import { uid } from '../lib/store'
 import type { MedicalCategory, MedicalItem } from '../lib/types'
 import { Empty, FileButton, Icon, Media, ScreenHeader, Sheet } from '../components/ui'
 import { TextField } from '../components/TextField'
+import { ItemDocs, SummarizeSheet } from '../components/DocSummary'
+import { listDocuments, type DocRef } from '../lib/docSummary'
 import { AskSheet, Contributions, Waiting } from '../components/AskSheet'
 import { medicalDrafts, type Draft } from '../lib/drafts'
 
@@ -41,6 +43,10 @@ export default function Medical() {
   const [editing, setEditing] = useState<MedicalItem | MedicalCategory | null>(null)
   const [asking, setAsking] = useState<{ question: string; target: NonNullable<import('../lib/types').Ask['target']>; suggestions?: Draft[] } | null>(null)
   const [surveying, setSurveying] = useState(false)
+  const [summarizing, setSummarizing] = useState<DocRef[] | null>(null)
+  const docs = listDocuments(data, { medical: true }).filter((d) => d.owner === 'medical')
+  const docsFor = (id?: string) => docs.filter((d) => d.itemId === id)
+  const unsummarized = docs.filter((d) => !d.summary)
   const items = data.medical
   const checklist = new Set(FAMILY_HISTORY.map((f) => f.title))
   const by = (c: MedicalCategory) => items.filter((i) => i.category === c && !(c === 'family' && checklist.has(i.title))).sort((a, b) => a.title.localeCompare(b.title))
@@ -58,6 +64,16 @@ export default function Medical() {
         <Empty icon="pill" title={isOwner ? 'Start your medical binder' : 'Nothing added yet'}>
           {isOwner && <p>Snap photos of your medicine bottles, add your doctors, or record a voice note about your health history.</p>}
         </Empty>
+      )}
+
+      {isOwner && unsummarized.length > 0 && (
+        <div className="card survey-card no-print">
+          <div>
+            <strong>{unsummarized.length} document{unsummarized.length === 1 ? '' : 's'} without a summary</strong>
+            <p className="muted small">Get a plain-language summary of each one — what’s worth a closer look, what looks good, and questions for the doctor — using your own AI app.</p>
+          </div>
+          <button className="btn small" onClick={() => setSummarizing(unsummarized)}><Icon name="sparkle" size={16} /> Summarize {unsummarized.length === 1 ? 'it' : 'them'}</button>
+        </div>
       )}
 
       {isOwner && (
@@ -81,6 +97,7 @@ export default function Medical() {
               {i.prescriber && <p className="muted small">Prescribed by {i.prescriber}</p>}
               {i.phone && <a className="chip" href={`tel:${i.phone}`} onClick={(e) => e.stopPropagation()}>Call {i.phone}</a>}
               {i.mediaIds.length > 0 && <div className="media-stack" onClick={(e) => e.stopPropagation()}>{i.mediaIds.map((m) => <Media key={m} id={m} />)}</div>}
+              {isOwner ? <ItemDocs docs={docsFor(i.id)} onSummarize={setSummarizing} /> : <ItemDocs docs={docsFor(i.id).filter((d) => d.summary)} onSummarize={() => null} />}
               <Contributions items={i.contributions} label="added" />
               {isOwner && <Waiting asks={waitingFor(i)} />}
               {isOwner && (
@@ -115,6 +132,7 @@ export default function Medical() {
               {!answered && <p className="muted small">{f.question}</p>}
               {item?.details && <p>{item.details}</p>}
               {item && item.mediaIds.length > 0 && <div className="media-stack">{item.mediaIds.map((m) => <Media key={m} id={m} />)}</div>}
+              {item && <ItemDocs docs={docsFor(item.id).filter((d) => isOwner || d.summary)} onSummarize={setSummarizing} />}
               <Contributions items={item?.contributions} label="added" />
               {isOwner && <Waiting asks={waitingFor({ id: item?.id, category: 'family', title: f.title })} />}
               {isOwner && (
@@ -136,6 +154,7 @@ export default function Medical() {
 
       {editing && <MedicalSheet item={typeof editing === 'string' ? null : editing} category={typeof editing === 'string' ? editing : editing.category} onClose={() => setEditing(null)}
         onAsk={(it) => { setEditing(null); setAsking({ question: askAbout(it), suggestions: medicalDrafts(it), target: { kind: 'medical', itemId: it.id, category: it.category, title: it.title } }) }} />}
+      {summarizing && <SummarizeSheet docs={summarizing} onClose={() => setSummarizing(null)} />}
       {surveying && (
         <AskSheet question="" onClose={() => setSurveying(false)} survey={{
           title: 'Family health history',

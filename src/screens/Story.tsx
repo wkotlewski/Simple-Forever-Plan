@@ -7,6 +7,8 @@ import Summary from './Summary'
 import { AiShare } from '../components/AiShare'
 import { LostRecordings } from '../components/LostRecordings'
 import { Transcribe } from '../components/Transcribe'
+import { ItemDocs, SummarizeSheet } from '../components/DocSummary'
+import { listDocuments, type DocRef } from '../lib/docSummary'
 import { mediaKind } from '../lib/store'
 import type { Answer, ChapterStory } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader } from '../components/ui'
@@ -221,6 +223,7 @@ function Recordings({ answers }: { answers: Answer[] }) {
     ...(a.contributions ?? []).flatMap((c) => c.mediaIds.map((m) => ({ m, q: `${c.from}: ${a.question}` }))),
   ]).filter(({ m }) => mediaKind(m) === 'audio' || mediaKind(m) === 'video'), [answers])
   const [playing, setPlaying] = useState<number | null>(null)
+  const [summarizing, setSummarizing] = useState<DocRef[] | null>(null)
   const { store, isOwner } = useData()
   const audio = useRef<HTMLAudioElement>(null)
 
@@ -252,6 +255,7 @@ function Recordings({ answers }: { answers: Answer[] }) {
           {a.text && <p className="answer-text">{a.text}</p>}
           <div className="media-stack">{a.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
           {isOwner && <Transcribe answer={a} />}
+          <ItemDocs docs={listDocuments({ medical: [], answers: [a] }).filter((d) => isOwner || d.summary)} onSummarize={setSummarizing} subtle />
           {a.contributions?.map((c) => (
             <div key={c.id} className="contribution">
               <p className="label">{c.from} remembers</p>
@@ -261,6 +265,7 @@ function Recordings({ answers }: { answers: Answer[] }) {
           ))}
         </article>
       ))}
+      {summarizing && <SummarizeSheet docs={summarizing} onClose={() => setSummarizing(null)} />}
     </section>
   )
 }

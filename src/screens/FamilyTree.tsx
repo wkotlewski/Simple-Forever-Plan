@@ -16,6 +16,13 @@ const CIRCLE_NAME = { family: 'Family', mentored: 'Someone I mentored', mentor: 
 const R = 30
 
 const LINK_LABEL: Record<Link, string> = { parent: 'Parent of', child: 'Child of', spouse: 'Spouse / partner of', sibling: 'Brother or sister of' }
+const LINK_ORDER: Link[] = ['spouse', 'child', 'parent', 'sibling']
+const LINK_SHORT: Record<Link, string> = { spouse: 'Spouse / partner', child: 'Child', parent: 'Parent', sibling: 'Brother / sister' }
+/** Quick choices for how someone is related to you; each fills in the connection to you. */
+const TO_YOU: { label: string; type: Link }[] = [
+  { label: 'My husband / wife / partner', type: 'spouse' }, { label: 'My parent', type: 'parent' },
+  { label: 'My child', type: 'child' }, { label: 'My brother / sister', type: 'sibling' },
+]
 
 export default function FamilyTree() {
   const { data, isOwner, session } = useData()
@@ -151,7 +158,9 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
   const isNew = !person
   const [f, setF] = useState<Person>(person ?? { id: uid(), name: '', notes: '', isSelf: !data.people.length })
   // Someone new can be connected to several people at once (e.g. child of Stanley and of Helen).
-  const [links, setLinks] = useState<{ type: Link; to: ID }[]>([{ type: 'child', to: data.people.find((p) => p.isSelf)?.id ?? data.people[0]?.id ?? '' }])
+  const selfId = data.people.find((p) => p.isSelf)?.id
+  // New people start with one connection to fill in; people already on the tree can add more when editing.
+  const [links, setLinks] = useState<{ type: Link; to: ID }[]>(person ? [] : [{ type: 'child', to: selfId ?? data.people[0]?.id ?? '' }])
   const [unticked, setUnticked] = useState<Set<string>>(new Set())
   const setLink = (i: number, patch: Partial<{ type: Link; to: ID }>) => setLinks((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)))
   const suggested = useMemo(() => (isNew ? suggestForNew(data.people, data.relations, f.id, links.filter((l) => l.to)) : []), [isNew, data.people, data.relations, f.id, links])
@@ -170,10 +179,10 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
   async function submit() {
     if (!f.name.trim()) return
     await save('people', { ...f, name: f.name.trim() })
-    if (isNew && others.length && (!f.circle || f.circle === 'family')) {
-      const ctx = { people: [...data.people, f], relations: [...data.relations], save }
+    if (others.length && (!f.circle || f.circle === 'family')) {
+      const ctx = { people: [...data.people.filter((p) => p.id !== f.id), f], relations: [...data.relations], save }
       for (const l of links.filter((l) => l.to)) await linkPeople(ctx, f.id, l.type, l.to)
-      for (const sg of suggested.filter(isTicked)) await linkPeople(ctx, f.id, sg.type, sg.other)
+      if (isNew) for (const sg of suggested.filter(isTicked)) await linkPeople(ctx, f.id, sg.type, sg.other)
     }
     if (isNew) onClose(); else setEditing(false)
   }
@@ -206,6 +215,20 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
             <TextField id="person-died" label="Passed" value={f.died ?? ''} onChange={(v) => setF({ ...f, died: v })} placeholder="If applicable" />
           </div>
           <div className="field"><span>Who are they to you?</span>
+            {selfId && selfId !== f.id && (
+              <div className="chips">{TO_YOU.map((t) => {
+                const on = (!f.circle || f.circle === 'family') && links.some((l) => l.to === selfId && l.type === t.type)
+                return (
+                  <button type="button" key={t.type} className={`chip ${on ? 'on' : ''}`} onClick={() => {
+                    setF({ ...f, circle: 'family' })
+                    setLinks((ls) => {
+                      const i = ls.findIndex((l) => l.to === selfId || !l.to)
+                      return i >= 0 ? ls.map((l, j) => (j === i ? { type: t.type, to: selfId } : l)) : [{ type: t.type, to: selfId }, ...ls]
+                    })
+                  }}>{t.label}</button>
+                )
+              })}</div>
+            )}
             <div className="chips">{(Object.keys(CIRCLE_NAME) as (keyof typeof CIRCLE_NAME)[]).map((c) => (
               <button type="button" key={c} className={`chip ${(f.circle ?? 'family') === c ? 'on' : ''}`} onClick={() => setF({ ...f, circle: c })}>{CIRCLE_NAME[c]}</button>
             ))}</div>
@@ -213,22 +236,25 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
           {f.circle && f.circle !== 'family' && (
             <TextField id="person-relation" label="In your words" value={f.relation ?? ''} onChange={(v) => setF({ ...f, relation: v })} placeholder="e.g. Apprentice at the shop" />
           )}
-          {isNew && others.length > 0 && (!f.circle || f.circle === 'family') && (
+          {others.length > 0 && (!f.circle || f.circle === 'family') && (
             <div className="stack connections">
-              <span className="field-title">How are they connected?</span>
+              <span className="field-title">{isNew ? 'How are they connected?' : 'Add a connection'}</span>
               {links.map((l, i) => (
-                <div key={i} className="connection-row">
-                  <select aria-label="They are the…" value={l.type} onChange={(e) => setLink(i, { type: e.target.value as Link })}>
-                    {(Object.keys(LINK_LABEL) as Link[]).map((k) => <option key={k} value={k}>{LINK_LABEL[k]}</option>)}
-                  </select>
+                <div key={i} className="connection-card">
+                  <div className="row between">
+                    <small className="muted">{f.name.trim().split(' ')[0] || 'They'} {f.name.trim() ? 'is the' : 'are the'}…</small>
+                    {(links.length > 1 || !isNew) && <button type="button" className="icon-btn" aria-label="Remove this connection" onClick={() => setLinks((ls) => ls.filter((_, j) => j !== i))}>✕</button>}
+                  </div>
+                  <div className="chips">{LINK_ORDER.map((k) => (
+                    <button type="button" key={k} className={`chip ${l.type === k ? 'on' : ''}`} onClick={() => setLink(i, { type: k })}>{LINK_SHORT[k]}</button>
+                  ))}</div>
                   <select aria-label="…of" value={l.to} onChange={(e) => setLink(i, { to: e.target.value })}>
-                    <option value="">Choose someone</option>
-                    {others.map((p) => <option key={p.id} value={p.id}>{p.name}{p.isSelf ? ' (you)' : ''}</option>)}
+                    <option value="">of… choose someone</option>
+                    {others.map((p) => <option key={p.id} value={p.id}>of {p.name}{p.isSelf ? ' (you)' : ''}</option>)}
                   </select>
-                  {links.length > 1 && <button type="button" className="icon-btn" aria-label="Remove this connection" onClick={() => setLinks((ls) => ls.filter((_, j) => j !== i))}>✕</button>}
                 </div>
               ))}
-              <button type="button" className="link-btn" onClick={() => setLinks((ls) => [...ls, { type: ls[ls.length - 1]?.type ?? 'child', to: '' }])}>+ Connect to someone else too</button>
+              <button type="button" className="link-btn" onClick={() => setLinks((ls) => [...ls, { type: ls[ls.length - 1]?.type ?? 'spouse', to: '' }])}>{links.length ? '+ Connect to someone else too' : '+ Connect to someone (spouse, parent, child…)'}</button>
               {suggested.length > 0 && (
                 <div className="link-suggestions">
                   <p className="label"><Icon name="sparkle" size={14} /> Based on your tree</p>
@@ -299,17 +325,18 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
 }
 
 function ConnectRow({ person, others, onConnect }: { person: Person; others: Person[]; onConnect: (id: ID, t: Link, other: ID) => Promise<void> }) {
-  const [type, setType] = useState<Link>('child')
-  const [other, setOther] = useState(others[0]?.id ?? '')
+  const [type, setType] = useState<Link>('spouse')
+  const [other, setOther] = useState(others.find((p) => p.isSelf)?.id ?? others[0]?.id ?? '')
   const [done, setDone] = useState(false)
   if (!others.length) return null
   return (
     <div className="connect card inset">
       <p className="label">Connect {person.name.split(' ')[0]} to someone</p>
-      <div className="grid2">
-        <select value={type} onChange={(e) => setType(e.target.value as Link)}>{(Object.keys(LINK_LABEL) as Link[]).map((k) => <option key={k} value={k}>{LINK_LABEL[k]}</option>)}</select>
-        <select value={other} onChange={(e) => setOther(e.target.value)}>{others.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-      </div>
+      <small className="muted">{person.name.split(' ')[0]} is the…</small>
+      <div className="chips">{LINK_ORDER.map((k) => (
+        <button type="button" key={k} className={`chip ${type === k ? 'on' : ''}`} onClick={() => setType(k)}>{LINK_SHORT[k]}</button>
+      ))}</div>
+      <select value={other} onChange={(e) => setOther(e.target.value)} style={{ width: '100%', fontSize: 16 }}>{others.map((p) => <option key={p.id} value={p.id}>of {p.name}{p.isSelf ? ' (you)' : ''}</option>)}</select>
       <button className="btn secondary small" onClick={async () => { await onConnect(person.id, type, other); setDone(true); setTimeout(() => setDone(false), 1500) }}>
         {done ? <><Icon name="check" size={16} /> Connected</> : 'Connect'}
       </button>

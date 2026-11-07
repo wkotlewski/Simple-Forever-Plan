@@ -389,6 +389,8 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 /* Connecting people on the tree */
 .connection-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
 .connection-row select { min-width: 0; font-size: 16px; }
+.connection-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid var(--line, #e5e0d8); }
+.connection-card select { width: 100%; font-size: 16px; }
 .link-suggestions { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--sage-soft); }
 .link-suggestions .label { display: flex; align-items: center; gap: 6px; color: var(--brand); }
 .link-suggestions .check { align-items: flex-start; font-size: 16px; }

@@ -36,7 +36,7 @@ export interface Survey {
   title: string
   /** Finishes "I'm working on …" in the text. */
   why: string
-  items: { question: string; label: string; target: Ask['target']; checked?: boolean }[]
+  items: { question: string; label: string; target: Ask['target']; checked?: boolean; historyIndex?: number }[]
 }
 
 export function AskSheet({ chapterId, questionId, target, question, suggestions, survey, onClose }: {
@@ -106,9 +106,12 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
     const common = { from, to: base.toName, note: base.note, reply: mine.trim() || undefined, box }
     if (survey) {
       // One link for the whole survey; each question is still its own ask, so each answer lands in the right place.
-      const surveyId = uid()
+      const surveyId = uid().slice(0, 12)
       const asks: Ask[] = chosen.map((it, i) => ({ id: `${surveyId}-${i}`, surveyId, target: it.target, question: it.question, ...base }))
-      return { ask: asks[0], asks, message: askMessage({ v: 1, id: surveyId, q: survey.title, qs: chosen.map((it) => it.question), ...common }, why), texted: false }
+      // Standard questions travel as numbers, so the link stays short.
+      const short = chosen.every((it) => it.historyIndex !== undefined)
+      const list = short ? { hq: chosen.map((it) => it.historyIndex!) } : { qs: chosen.map((it) => it.question) }
+      return { ask: asks[0], asks, message: askMessage({ v: 1, id: surveyId, q: survey.title, ...list, ...common }, why), texted: false }
     }
     const ask: Ask = { id: uid(), chapterId, questionId, target: askTarget, question: q.trim(), ...base }
     const more = askTarget?.kind === 'medical' && askTarget.category === 'family' ? 'health' as const : undefined

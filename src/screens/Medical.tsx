@@ -162,9 +162,9 @@ export default function Medical() {
         <AskSheet question="" onClose={() => setSurveying(false)} survey={{
           title: 'Family health history',
           why: 'our family health history, so doctors and the generations after us know what runs in the family',
-          items: FAMILY_HISTORY.map((f) => {
+          items: FAMILY_HISTORY.map((f, historyIndex) => {
             const item = items.find((i) => i.category === 'family' && i.title === f.title)
-            return { label: f.title, question: f.question, target: { kind: 'medical', itemId: item?.id, category: 'family', title: f.title }, checked: !item?.details }
+            return { label: f.title, question: f.question, target: { kind: 'medical', itemId: item?.id, category: 'family', title: f.title }, checked: !item?.details, historyIndex }
           }),
         }} />
       )}

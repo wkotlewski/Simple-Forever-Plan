@@ -30,7 +30,8 @@ function AskFooter({ from }: { from: string }) {
 }
 
 export default function AskAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
-  if (ask.qs?.length) return <SurveyAnswer ask={ask} onDone={onDone} />
+  const qs = ask.qs ?? ask.hq?.map((i) => FAMILY_HISTORY[i]?.question).filter(Boolean)
+  if (qs?.length) return <SurveyAnswer ask={{ ...ask, qs }} onDone={onDone} />
   return <OneQuestion ask={ask} onDone={onDone} />
 }
 

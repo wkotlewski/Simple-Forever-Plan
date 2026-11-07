@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useData } from '../lib/data'
 import { collectMediaIds } from '../lib/backup'
 import { listLocalMediaIds, mediaKind, uid } from '../lib/store'
-import { CHAPTERS } from '../lib/questions'
+import { allQuestions, CHAPTERS } from '../lib/questions'
 import type { ID } from '../lib/types'
 import { Icon, Media } from './ui'
 
@@ -26,8 +26,8 @@ export function LostRecordings() {
 
   async function attach(id: ID) {
     const questionId = choice[id]
-    const chapter = CHAPTERS.find((c) => c.questions.some((q) => q.id === questionId))
-    const question = chapter?.questions.find((q) => q.id === questionId)
+    const chapter = CHAPTERS.find((c) => allQuestions(c).some((q) => q.id === questionId))
+    const question = chapter && allQuestions(chapter).find((q) => q.id === questionId)
     if (!chapter || !question) return
     const existing = data.answers.find((a) => a.questionId === questionId)
     await save('answers', existing
@@ -48,7 +48,7 @@ export function LostRecordings() {
             <option value="">Which question does this answer?</option>
             {CHAPTERS.map((c) => (
               <optgroup key={c.id} label={c.title}>
-                {c.questions.map((q) => <option key={q.id} value={q.id}>{q.text}</option>)}
+                {allQuestions(c).map((q) => <option key={q.id} value={q.id}>{q.followUp ? `  ↳ ${q.text}` : q.text}</option>)}
               </optgroup>
             ))}
           </select>

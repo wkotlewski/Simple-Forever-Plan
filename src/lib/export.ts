@@ -1,4 +1,4 @@
-import { CHAPTERS } from './questions'
+import { CHAPTERS, questionOrder } from './questions'
 import { MED_LABELS } from './medicalLabels'
 import { childrenOf, parentsOf, spousesOf } from './tree'
 import type { CollectionMap, CollectionName, Contribution } from './types'
@@ -15,7 +15,7 @@ export function planSections(data: Data, name: string, opts: { medical: boolean;
   for (const c of CHAPTERS) {
     if (opts.chapterId && c.id !== opts.chapterId) continue
     const answers = data.answers.filter((a) => a.chapterId === c.id)
-      .sort((a, b) => c.questions.findIndex((q) => q.id === a.questionId) - c.questions.findIndex((q) => q.id === b.questionId))
+      .sort((a, b) => questionOrder(c, a.questionId) - questionOrder(c, b.questionId))
     const paragraphs = answers.flatMap((a) => {
       const own = a.text.trim() && !a.skipped ? [`${a.question}\n${a.text.trim()}`] : []
       const fam = memories(a.contributions).map((m) => `${a.question}\n${m}`)

@@ -122,3 +122,23 @@ export const CHAPTERS: Chapter[] = [
 export const chapterById = (id: string) => CHAPTERS.find((c) => c.id === id)
 
 export const OCCASIONS = ['Hard days', 'Grief', 'Wedding', 'New baby', 'Graduation', 'New job', 'Birthday', 'Holidays', 'Anytime']
+
+// ---------- "Tell me more" follow-ups ----------
+// Each follow-up is answered as its own question, stored with an id like "roots-home~f0".
+
+export const followUpId = (questionId: string, i: number) => `${questionId}~f${i}`
+export const isFollowUp = (questionId: string) => questionId.includes('~f')
+
+/** Every question in a chapter in reading order, with each follow-up right after its question. */
+export const allQuestions = (c: Chapter): { id: string; text: string; followUp: boolean }[] =>
+  c.questions.flatMap((q) => [
+    { id: q.id, text: q.text, followUp: false },
+    ...(q.followUps ?? []).map((f, i) => ({ id: followUpId(q.id, i), text: f, followUp: true })),
+  ])
+
+/** Position of a question (or follow-up) in its chapter, for putting answers in order. */
+export const questionOrder = (c: Chapter, questionId: string) => {
+  const [base, f] = questionId.split('~f')
+  const i = c.questions.findIndex((q) => q.id === base)
+  return (i === -1 ? 999 : i) * 10 + (f === undefined ? 0 : Number(f) + 1)
+}

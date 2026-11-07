@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useData } from '../lib/data'
-import { chapterById, OCCASIONS } from '../lib/questions'
+import { chapterById, followUpId, OCCASIONS, type Question } from '../lib/questions'
+import { saveToApp } from '../lib/backup'
+import { Transcribe } from '../components/Transcribe'
 import { canRecord, canTranscribe, clock, useRecorder } from '../lib/recorder'
 import { uid } from '../lib/store'
 import type { Answer } from '../lib/types'
@@ -32,7 +34,7 @@ export default function Interview({ chapterId, onDone }: { chapterId: string; on
       {index === 0 && (
         <p className="comfort"><Icon name="heart" size={18} /> Take your time. You can skip any question, come back later, and change anything. Nothing is shared until you choose to share it.</p>
       )}
-      <QuestionCard key={q.id} chapterId={chapter.id} questionId={q.id} onNext={next} />
+      <QuestionCard key={q.id} chapterId={chapter.id} question={q} onNext={next} />
       <div className="row between">
         <button className="link-btn" disabled={index === 0} onClick={() => setIndex(index - 1)}><Icon name="back" size={18} /> Previous</button>
         <button className="link-btn" onClick={next}>{index + 1 < chapter.questions.length ? 'Next question' : 'Finish chapter'} →</button>
@@ -41,8 +43,7 @@ export default function Interview({ chapterId, onDone }: { chapterId: string; on
   )
 }
 
-function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; questionId: string; onNext: () => void }) {
-  const q = chapterById(chapterId)!.questions.find((x) => x.id === questionId)!
+function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: string; question: Question; onNext: () => void; nested?: boolean }) {
   const { data, save, store } = useData()
   const existing = data.answers.find((a) => a.questionId === q.id)
   const [mode, setMode] = useState<null | 'audio' | 'video' | 'write'>(null)
@@ -50,7 +51,9 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   const [pendingMedia, setPendingMedia] = useState<string[]>([])
   const [keep, setKeep] = useState(Boolean(q.keepsake))
   const [busy, setBusy] = useState(false)
-  const [followUp, setFollowUp] = useState<string | null>(null)
+  const [showMore, setShowMore] = useState(false)
+  const [lastRecording, setLastRecording] = useState<File | null>(null)
+  const [copyNote, setCopyNote] = useState('')
   const [asking, setAsking] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
   const found = useSuggestions(existing ? [existing] : [])
@@ -60,22 +63,18 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   useEffect(() => { if (videoRef.current && rec.stream) videoRef.current.srcObject = rec.stream }, [rec.stream])
   useEffect(() => { if (rec.state === 'recording') setDraft(rec.liveText) }, [rec.liveText, rec.state])
 
-  const asked = followUp ?? q.text
 
   async function startRecording(kind: 'audio' | 'video') {
     setMode(kind)
     await rec.start(kind)
   }
 
-  /**
-   * Saves what's in the editor onto this question. A follow-up adds to what was already said;
-   * a fresh answer replaces the text (a recording alone keeps the text that's there).
-   */
-  async function persist(v: { text: string; media: string[]; followUp: string | null; keep: boolean; existing?: Answer }) {
+  /** Saves what's in the editor onto this question. New words replace the text; a recording alone keeps the text that's there. */
+  async function persist(v: { text: string; media: string[]; keep: boolean; existing?: Answer }) {
     const text = v.text.trim()
     if (!text && !v.media.length) return
     const prior = v.existing && !v.existing.skipped ? v.existing.text : ''
-    const joined = v.followUp ? [prior, text].filter(Boolean).join('\n\n') : text || prior
+    const joined = text || prior
     const answer: Answer = {
       id: v.existing?.id ?? uid(),
       chapterId,
@@ -87,7 +86,7 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
       contributions: v.existing?.contributions,
     }
     await save('answers', answer)
-    if (v.keep && q.keepsake && text && !v.followUp) {
+    if (v.keep && q.keepsake && text) {
       await save('messages', {
         id: `from-${q.id}`, kind: q.keepsake, text, occasions: [KEEPSAKE_OCCASION[q.keepsake] ?? OCCASIONS[0]],
         mediaIds: v.media, createdAt: Date.now(),
@@ -97,8 +96,8 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   }
 
   // Latest editor state, so anything unsaved is kept when moving to another question or screen.
-  const latest = useRef({ text: draft, media: pendingMedia, followUp, keep, existing })
-  latest.current = { text: draft, media: pendingMedia, followUp, keep, existing }
+  const latest = useRef({ text: draft, media: pendingMedia, keep, existing })
+  latest.current = { text: draft, media: pendingMedia, keep, existing }
   useEffect(() => () => {
     const v = latest.current
     if (v.text.trim() || v.media.length) persist(v).catch(() => null)
@@ -110,19 +109,22 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
     if (!out) return
     setBusy(true)
     const id = await store.putMedia(out.blob)
-    const saved = await persist({ text: out.transcript, media: [id], followUp, keep: false, existing })
+    const saved = await persist({ text: out.transcript, media: [id], keep: false, existing })
     // Keep the editor open on the saved text so it can be corrected; it's already safe.
     setDraft(saved?.text ?? out.transcript)
     setPendingMedia([])
-    setFollowUp(null)
     setJustSaved(true)
+    const ext = (out.blob.type.split('/')[1] ?? 'webm').split(';')[0].replace('mpeg', 'mp3').replace('mp4', out.blob.type.startsWith('audio') ? 'm4a' : 'mp4')
+    const when = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    setLastRecording(new File([out.blob], `${q.text.replace(/[\\/:*?"<>|]+/g, '').slice(0, 60)} (${when}).${ext}`, { type: out.blob.type }))
+    setCopyNote('')
     setBusy(false)
   }
 
   async function upload(file: File) {
     setBusy(true)
     const id = await store.putMedia(file)
-    await persist({ text: '', media: [id], followUp: null, keep: false, existing })
+    await persist({ text: '', media: [id], keep: false, existing })
     setMode((m) => m ?? 'write')
     setJustSaved(true)
     setBusy(false)
@@ -131,8 +133,8 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   async function commit() {
     if (!draft.trim() && !pendingMedia.length) { setMode(null); return }
     setBusy(true)
-    await persist({ text: draft, media: pendingMedia, followUp, keep, existing })
-    setDraft(''); setPendingMedia([]); setMode(null); setFollowUp(null); setJustSaved(false); setBusy(false)
+    await persist({ text: draft, media: pendingMedia, keep, existing })
+    setDraft(''); setPendingMedia([]); setMode(null); setJustSaved(false); setLastRecording(null); setBusy(false)
   }
 
   async function skip() {
@@ -141,18 +143,20 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
   }
 
   const answered = existing && !existing.skipped
+  const hasMoreAnswers = (q.followUps ?? []).some((_, i) => data.answers.some((a) => a.questionId === followUpId(q.id, i)))
   const hasDraft = draft.trim() || pendingMedia.length
 
   return (
-    <section className="card question-card">
-      <h2 className="question">{asked}</h2>
-      {!followUp && q.hint && <p className="hint">{q.hint}</p>}
+    <section className={nested ? 'follow-up stack' : 'card question-card'}>
+      {nested ? <p className="follow-up-q"><span className="label">Tell me more</span>{q.text}</p> : <h2 className="question">{q.text}</h2>}
+      {q.hint && <p className="hint">{q.hint}</p>}
 
       {answered && !mode && (existing.text || existing.mediaIds.length > 0) && (
         <div className="saved-answer">
           <p className="label"><Icon name="check" size={16} /> Saved</p>
           {existing.text && <p className="answer-text">{existing.text}</p>}
           <div className="media-stack">{existing.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
+          <Transcribe answer={existing} />
         </div>
       )}
 
@@ -173,10 +177,19 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
         <div className="draft">
           {pendingMedia.length > 0 && <div className="media-stack">{pendingMedia.map((m) => <Media key={m} id={m} />)}</div>}
           {justSaved && <p className="success"><Icon name="check" size={16} /> Saved to this question. Fix the words below if you like.</p>}
+          {justSaved && lastRecording && (
+            <div className="copy-recording">
+              <button className="btn secondary small" onClick={async () => {
+                try { const r = await saveToApp(lastRecording); if (r !== 'cancelled') setCopyNote('Copy saved. Your recording is also kept here in the app.') }
+                catch (e: any) { setCopyNote(e?.message ?? 'Couldn’t save a copy.') }
+              }}><Icon name="upload" size={16} /> Save a copy to my phone</button>
+              <p className="muted small">{copyNote || 'Extra safety: keep this recording in Files, iCloud, Google Drive or any app you choose.'}</p>
+            </div>
+          )}
           <TextField id="answer-draft" multiline rows={6} autoFocus={mode === 'write'} value={draft} onChange={setDraft}
             label={mode === 'write' ? 'Your answer — type, or tap the microphone and talk' : canTranscribe ? 'What you said (fix anything that came out wrong)' : 'Write a few words about what you shared so it can go in your story'}
             placeholder="Write as much or as little as you like…" />
-          {q.keepsake && !followUp && (
+          {q.keepsake && (
             <label className="check"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Also save this in Words to Keep</label>
           )}
           <div className="row">
@@ -197,14 +210,20 @@ function QuestionCard({ chapterId, questionId, onNext }: { chapterId: string; qu
           <button className="btn secondary ask-btn" onClick={() => setAsking(true)}>
             <Icon name="share" size={18} /> Ask someone who knows
           </button>
-          <div className="row between">
-            <button className="btn ghost skip" onClick={skip}><Icon name="skip" size={18} /> {answered ? 'Move on' : 'Not this one'}</button>
-            {answered && q.followUps?.[0] && !followUp && (
-              <button className="btn secondary" onClick={() => setFollowUp(q.followUps![0])}>Tell me more</button>
-            )}
-          </div>
+          {!nested && (
+            <div className="row between">
+              <button className="btn ghost skip" onClick={skip}><Icon name="skip" size={18} /> {answered ? 'Move on' : 'Not this one'}</button>
+              {answered && (q.followUps?.length ?? 0) > 0 && !showMore && !hasMoreAnswers && (
+                <button className="btn secondary" onClick={() => setShowMore(true)}>Tell me more</button>
+              )}
+            </div>
+          )}
         </>
       )}
+      {/* Follow-up questions are their own answers, shown with their own question. */}
+      {!nested && (showMore || hasMoreAnswers) && q.followUps?.map((f, i) => (
+        <QuestionCard key={followUpId(q.id, i)} chapterId={chapterId} question={{ id: followUpId(q.id, i), text: f }} onNext={onNext} nested />
+      ))}
       {asking && <AskSheet chapterId={chapterId} questionId={q.id} question={q.text} onClose={() => setAsking(false)} />}
     </section>
   )

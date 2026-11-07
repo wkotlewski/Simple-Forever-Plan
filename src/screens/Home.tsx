@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useData } from '../lib/data'
 import type { Access } from '../lib/auth'
 import StorageSheet from '../components/StorageSheet'
-import { CHAPTERS } from '../lib/questions'
+import { CHAPTERS, isFollowUp } from '../lib/questions'
 import { Icon } from '../components/ui'
 import type { Tab } from '../App'
 
@@ -20,8 +20,9 @@ export default function Home({ go, onSignOut, onSwitch }: { go: (t: Tab) => void
   const needsBackup = isOwner && store.mode !== 'cloud' && somethingSaved
     && (!settings.lastBackupAt || Date.now() - settings.lastBackupAt > 7 * DAY)
     && (!settings.backupSnoozedUntil || Date.now() > settings.backupSnoozedUntil)
-  const answered = data.answers.filter((a) => !a.skipped && (a.text || a.mediaIds.length)).length
-  const touched = data.answers.length
+  const main = data.answers.filter((a) => !isFollowUp(a.questionId))
+  const answered = main.filter((a) => !a.skipped && (a.text || a.mediaIds.length)).length
+  const touched = main.length
   const pct = Math.round((touched / TOTAL) * 100)
   const first = (isOwner ? session.name : settings.storytellerName).split(' ')[0]
 

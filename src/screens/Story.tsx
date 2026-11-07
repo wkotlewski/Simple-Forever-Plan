@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useData } from '../lib/data'
-import { CHAPTERS, chapterById } from '../lib/questions'
+import { CHAPTERS, chapterById, isFollowUp, questionOrder } from '../lib/questions'
 import { composeChapter, correctionsFrom, writerAvailable } from '../lib/compose'
 import { ensureInbox } from '../lib/inbox'
 import Summary from './Summary'
 import { AiShare } from '../components/AiShare'
 import { LostRecordings } from '../components/LostRecordings'
+import { Transcribe } from '../components/Transcribe'
 import { mediaKind } from '../lib/store'
 import type { Answer, ChapterStory } from '../lib/types'
 import { Empty, Icon, Media, ScreenHeader } from '../components/ui'
@@ -65,7 +66,7 @@ function ChapterList({ open, onBook, onSummary }: { open: (id: string, interview
 
       <div className="chapter-list">
         {chapters.map((c, i) => {
-          const answers = data.answers.filter((a) => a.chapterId === c.id)
+          const answers = data.answers.filter((a) => a.chapterId === c.id && !isFollowUp(a.questionId))
           const done = answers.filter((a) => !a.skipped).length
           const story = data.stories.find((s) => s.id === c.id)
           return (
@@ -104,7 +105,7 @@ function ChapterView({ id, onBack, onAnswer }: { id: string; onBack: () => void;
   const chapter = chapterById(id)!
   const { data, isOwner, settings, session, save } = useData()
   const answers = data.answers.filter((a) => a.chapterId === id && (!a.skipped || a.contributions?.length))
-    .sort((a, b) => chapter.questions.findIndex((q) => q.id === a.questionId) - chapter.questions.findIndex((q) => q.id === b.questionId))
+    .sort((a, b) => questionOrder(chapter, a.questionId) - questionOrder(chapter, b.questionId))
   const story = data.stories.find((s) => s.id === id)
   const [body, setBody] = useState(story?.body ?? '')
   const [editing, setEditing] = useState(false)
@@ -220,7 +221,7 @@ function Recordings({ answers }: { answers: Answer[] }) {
     ...(a.contributions ?? []).flatMap((c) => c.mediaIds.map((m) => ({ m, q: `${c.from}: ${a.question}` }))),
   ]).filter(({ m }) => mediaKind(m) === 'audio' || mediaKind(m) === 'video'), [answers])
   const [playing, setPlaying] = useState<number | null>(null)
-  const { store } = useData()
+  const { store, isOwner } = useData()
   const audio = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
@@ -250,6 +251,7 @@ function Recordings({ answers }: { answers: Answer[] }) {
           <p className="label">{a.question}</p>
           {a.text && <p className="answer-text">{a.text}</p>}
           <div className="media-stack">{a.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
+          {isOwner && <Transcribe answer={a} />}
           {a.contributions?.map((c) => (
             <div key={c.id} className="contribution">
               <p className="label">{c.from} remembers</p>

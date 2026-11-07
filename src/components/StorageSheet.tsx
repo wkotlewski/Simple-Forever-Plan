@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useData } from '../lib/data'
-import { makeBackup, makeSpreadsheet, restoreBackup, saveToApp } from '../lib/backup'
+import { makeBackup, makeSpreadsheet, restoreBackup, restoreSummary, saveToApp } from '../lib/backup'
 import { makePdf, planSections } from '../lib/export'
 import { driveConfigured } from '../lib/google'
 import { connectAndOpenDrive } from '../lib/openDrive'
@@ -110,9 +110,9 @@ export default function StorageSheet({ onClose, onSwitch, onDisconnect }: {
             <h3>Restore from a copy</h3>
             <p className="muted small">Bring back a backup you saved earlier, on this phone or a new one. It adds to what’s here — nothing already in the app is removed.</p>
             <FileButton label="Choose a saved backup" accept=".zip,application/zip,application/json,.json" onFile={(f) => run(async () => {
-              const n = await restoreBackup(f, store, setStatus)
-              setTimeout(() => window.location.reload(), 1200)
-              return `Restored ${n} items.`
+              const r = await restoreBackup(f, store, setStatus)
+              if (r.added || r.filledIn) setTimeout(() => window.location.reload(), 2500)
+              return restoreSummary(r)
             })} />
           </section>
         )}

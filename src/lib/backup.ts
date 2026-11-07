@@ -1,4 +1,4 @@
-import type { Store } from './store'
+import { listLocalMediaIds, type Store } from './store'
 import { MED_LABELS } from './medicalLabels'
 import { CHAPTERS } from './questions'
 import type { CollectionMap, CollectionName, ID } from './types'
@@ -99,7 +99,32 @@ export async function makeBackup(store: Store, data: Data, includeMedia: boolean
 }
 
 /** Restores a backup (ZIP, or the older single .json file). Items with the same id are replaced; nothing else is removed. */
-export async function restoreBackup(file: File, store: Store, onProgress?: (t: string) => void): Promise<number> {
+/**
+ * Fills one saved item from its backup copy without losing anything newer on this phone:
+ * empty fields are filled in, lists (recordings, relatives' answers…) are combined, and anything already
+ * filled in on the phone is kept as it is.
+ */
+function mergeItem(mine: any, saved: any): any {
+  const out = { ...mine }
+  for (const [k, v] of Object.entries(saved)) {
+    const cur = mine[k]
+    if (cur === undefined || cur === null || cur === '') out[k] = v
+    else if (Array.isArray(cur) && Array.isArray(v)) {
+      const key = (x: any) => (x && typeof x === 'object' ? x.id ?? JSON.stringify(x) : x)
+      const have = new Set(cur.map(key))
+      out[k] = [...cur, ...v.filter((x) => !have.has(key(x)))]
+    }
+  }
+  return out
+}
+
+export interface RestoreResult { added: number; filledIn: number; name?: string }
+
+/**
+ * Brings back a saved backup (the ZIP, or an older .json copy). Never removes or overwrites anything on this phone:
+ * missing items are added, items on both are filled in from the backup, and recordings already here aren't copied twice.
+ */
+export async function restoreBackup(file: File, store: Store, onProgress?: (t: string) => void): Promise<RestoreResult> {
   let parsed: any
   let readMedia: (ref: string) => Promise<Blob | null>
   const bytes = new Uint8Array(await file.arrayBuffer())
@@ -123,23 +148,40 @@ export async function restoreBackup(file: File, store: Store, onProgress?: (t: s
   const renamed = new Map<ID, ID>()
   const medical = medicalMedia(parsed.data)
   const entries = Object.entries(parsed.media ?? {}) as [ID, string][]
+  const already = new Set(store.mode === 'local' ? await listLocalMediaIds() : [])
   let n = 0
   for (const [id, ref] of entries) {
     onProgress?.(`Restoring recordings and photos… ${++n} of ${entries.length}`)
+    if (already.has(id)) { renamed.set(id, id); continue }
     const blob = await readMedia(ref)
     if (blob) renamed.set(id, await store.putMedia(blob, medical.has(id) ? 'medical' : undefined))
   }
-  let count = 0
+  let added = 0, filledIn = 0
   for (const c of COLLECTIONS) {
-    const items = (parsed.data[c] ?? []).map((it: any) => remapMedia(it, renamed))
-    if (!items.length) continue
+    const saved = (parsed.data[c] ?? []).map((it: any) => remapMedia(it, renamed))
+    if (!saved.length) continue
     onProgress?.('Restoring your stories, notes and family tree…')
-    if (store.putMany) await store.putMany(c, items)
-    else for (const it of items) await store.put(c, it)
-    count += items.length
+    const mine = new Map((await store.list(c)).map((it: any) => [it.id, it]))
+    const out: any[] = []
+    for (const it of saved) {
+      const cur = mine.get(it.id)
+      if (!cur) { out.push(it); added++; continue }
+      const merged = mergeItem(cur, it)
+      if (JSON.stringify(merged) !== JSON.stringify(cur)) { out.push(merged); filledIn++ }
+    }
+    if (!out.length) continue
+    if (store.putMany) await store.putMany(c, out)
+    else for (const it of out) await store.put(c, it)
   }
-  return count
+  const settings = (await store.list('settings'))[0] as any
+  return { added, filledIn, name: settings?.storytellerName || undefined }
 }
+
+/** A short line saying what a restore brought back. */
+export const restoreSummary = (r: RestoreResult) =>
+  r.added || r.filledIn
+    ? `Brought back ${r.added} item${r.added === 1 ? '' : 's'}${r.filledIn ? ` and filled in ${r.filledIn} more` : ''}. Nothing on this phone was removed.`
+    : 'Everything in this backup is already on this phone — nothing was missing.'
 
 const csvCell = (v: unknown) => {
   const s = String(v ?? '').replace(/\r?\n/g, ' ')

@@ -3,6 +3,7 @@ import { ensureInbox, inboxAvailable } from '../lib/inbox'
 import { useData } from '../lib/data'
 import { askMessage, findReply, shareMessage, smsLink, type ReplyPayload } from '../lib/ask'
 import { uid } from '../lib/store'
+import { CHAPTERS } from '../lib/questions'
 import type { Ask, Contribution } from '../lib/types'
 import type { Draft } from '../lib/drafts'
 import { Icon, Media, Sheet } from './ui'
@@ -78,20 +79,42 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
   const setPerson = (i: number, patch: Partial<Recipient>) => setPeople((cur) => cur.map((p, j) => (j === i ? { ...p, ...patch } : p)))
   const isChosen = (r: Recipient) => people.some((p) => digits(p.phone) === digits(r.phone))
 
+  // What the answer is for, said in the text so family know why they're being asked.
+  const aboutPerson = askTarget?.kind === 'person' ? data.people.find((p) => p.id === askTarget.personId) : undefined
+  const why = askTarget?.kind === 'medical' ? 'our family health history, so doctors and the generations after us know what runs in the family'
+    : aboutPerson ? (aboutPerson.isSelf ? 'our family tree' : `our family tree — getting ${aboutPerson.name}’s details right`)
+    : chapterId ? `my life story — the part about “${CHAPTERS.find((c) => c.id === chapterId)?.title ?? 'my life'}”`
+    : 'my life story'
+
   function makeOne(r: Recipient) {
     const ask: Ask = { id: uid(), chapterId, questionId, target: askTarget, question: q.trim(), toName: r.name.trim(), toPhone: r.phone.trim(), note: note.trim() || undefined, sentAt: Date.now() }
-    return { ask, message: askMessage({ v: 1, id: ask.id, q: ask.question, from, to: ask.toName, note: ask.note, reply: mine.trim() || undefined, box }), texted: false }
+    return { ask, message: askMessage({ v: 1, id: ask.id, q: ask.question, from, to: ask.toName, note: ask.note, reply: mine.trim() || undefined, box }, why), texted: false }
   }
 
-  async function prepare() {
-    const list = filled.map(makeOne)
+  async function prepare(list = filled.map(makeOne)) {
     for (const it of list) await save('asks', it.ask)
     if (mine.trim() !== (settings.phone ?? '')) await save('settings', { ...settings, inboxId: box ?? settings.inboxId, phone: mine.trim() || undefined })
     setSent(list)
     return list
   }
 
-  const previewMsg = askMessage({ v: 1, id: 'preview', q: q.trim(), from, to: filled[0]?.name.trim() || 'there', note: note.trim() || undefined, reply: mine.trim() || undefined, box })
+  /** Copy the message to paste into a text thread you already have (a family group chat, WhatsApp…). No number needed. */
+  async function copyInstead() {
+    const named = people.filter((p) => p.name.trim())
+    const list = named.length ? named.map(makeOne) : [makeOne({ name: 'everyone', phone: '' })]
+    let ok = false
+    // Copy straight away (before saving) — phones only allow copying right after a tap.
+    try { await navigator.clipboard.writeText(list[0].message); ok = true } catch { /* the copy buttons on the next screen still work */ }
+    await prepare(list)
+    setCopied(ok ? list[0].ask.id : null)
+  }
+
+  async function copyOne(id: string, message: string) {
+    try { await navigator.clipboard.writeText(message); setCopied(id) } catch { shareMessage(message) }
+  }
+
+  const [copied, setCopied] = useState<string | null>(null)
+  const previewMsg = askMessage({ v: 1, id: 'preview', q: q.trim(), from, to: filled[0]?.name.trim() || 'there', note: note.trim() || undefined, reply: mine.trim() || undefined, box }, why)
 
   return (
     <Sheet title="Ask family" onClose={onClose}>
@@ -167,21 +190,31 @@ export function AskSheet({ chapterId, questionId, target, question, suggestions,
                 <Icon name="share" size={20} /> Text {filled[0]?.name.trim() || 'them'} the question
               </a>
             ) : (
-              <button className="btn big" disabled={!ready} onClick={prepare}><Icon name="share" size={20} /> Get texts ready for {filled.length} people</button>
+              <button className="btn big" disabled={!ready} onClick={() => prepare()}><Icon name="share" size={20} /> Get texts ready for {filled.length} people</button>
             )}
+            <button className="btn secondary" disabled={!q.trim() || preparing} onClick={copyInstead}>
+              <Icon name="type" size={18} /> Copy the message to paste in a text thread
+            </button>
             <p className="muted small">Each person gets their own link. They can type or talk their answer{box ? ', tap Submit, and it shows up here' : ', and it comes back to you'} with their name on it.</p>
           </>
         ) : (
           <>
             <p className="ask-preview">“{q.trim()}”</p>
-            {sent.length > 1 && <p className="muted small">Tap each person to open Messages with their own text.</p>}
+            {copied && sent.length === 1 && <p className="success" role="status"><Icon name="check" size={16} /> Message copied. Open your text thread, then press and hold in the message box and tap Paste.</p>}
+            {sent.length === 1 && sent[0].ask.toName === 'everyone' && <p className="muted small">Anyone in the thread can tap the link and answer — each answer comes back with their name on it.</p>}
+            {sent.length > 1 && <p className="muted small">Tap each person to text them, or copy their message to paste into a thread you already have.</p>}
             <div className="stack">
               {sent.map((it, i) => (
                 <div key={it.ask.id} className="send-row">
-                  <span>{it.texted ? <Icon name="check" size={16} /> : null} <strong>{it.ask.toName}</strong> <small className="muted">{it.ask.toPhone}</small></span>
+                  <span>{it.texted ? <Icon name="check" size={16} /> : null} <strong>{it.ask.toName === 'everyone' ? 'Your family thread' : it.ask.toName}</strong> <small className="muted">{it.ask.toPhone}</small></span>
                   <div className="row wrap">
-                    <a className={`btn small ${it.texted ? 'ghost' : ''}`} href={smsLink(it.ask.toPhone, it.message)}
-                      onClick={() => setSent((cur) => cur!.map((x, j) => (j === i ? { ...x, texted: true } : x)))}>{it.texted ? 'Text again' : `Text ${it.ask.toName.split(' ')[0]}`}</a>
+                    {it.ask.toPhone && (
+                      <a className={`btn small ${it.texted ? 'ghost' : ''}`} href={smsLink(it.ask.toPhone, it.message)}
+                        onClick={() => setSent((cur) => cur!.map((x, j) => (j === i ? { ...x, texted: true } : x)))}>{it.texted ? 'Text again' : `Text ${it.ask.toName.split(' ')[0]}`}</a>
+                    )}
+                    <button className={`btn small ${it.ask.toPhone ? 'ghost' : ''}`} onClick={() => copyOne(it.ask.id, it.message)}>
+                      {copied === it.ask.id ? <><Icon name="check" size={14} /> Copied</> : 'Copy message'}
+                    </button>
                     <button className="btn ghost small" onClick={() => shareMessage(it.message)}>Share…</button>
                   </div>
                 </div>

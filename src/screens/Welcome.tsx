@@ -5,10 +5,12 @@ import {
 import { cloudEnabled } from '../lib/supabase'
 import { driveConfigured } from '../lib/google'
 import { connectAndOpenDrive } from '../lib/openDrive'
-import { Icon } from '../components/ui'
+import { FileButton, Icon } from '../components/ui'
+import { localStore } from '../lib/store'
+import { restoreBackup, restoreSummary } from '../lib/backup'
 import DriveConsent from '../components/DriveConsent'
 
-type Path = null | 'owner' | 'family' | 'drive'
+type Path = null | 'owner' | 'family' | 'drive' | 'restore'
 
 export default function Welcome({ onAccess }: { onAccess: (a: Access) => void }) {
   const [path, setPath] = useState<Path>(null)
@@ -31,6 +33,7 @@ export default function Welcome({ onAccess }: { onAccess: (a: Access) => void })
             <Icon name="lock" size={28} />
             <span><strong>I'm family — I have a code</strong><small>Open the stories and notes someone shared with you.</small></span>
           </button>
+          <button className="link-btn center" onClick={() => setPath('restore')}>New phone, or lost your plan? Bring back a saved backup</button>
           {driveConfigured && !cloudEnabled && (
             <button className="link-btn center" onClick={() => setPath('drive')}>Already saved your plan to Google Drive? Open it here</button>
           )}
@@ -41,6 +44,7 @@ export default function Welcome({ onAccess }: { onAccess: (a: Access) => void })
         <div className="card welcome-form">
           <button className="link-btn" onClick={() => setPath(null)}><Icon name="back" size={18} /> Back</button>
           {path === 'drive' ? <DriveStep onAccess={onAccess} />
+            : path === 'restore' ? <RestoreStep onAccess={onAccess} />
             : cloudEnabled ? <CloudSignIn path={path} onAccess={onAccess} /> : <LocalSignIn path={path} onAccess={onAccess} />}
         </div>
       )}
@@ -52,6 +56,41 @@ export default function Welcome({ onAccess }: { onAccess: (a: Access) => void })
             ? 'Nothing is saved to Google Drive unless you agree to it. Otherwise everything stays privately on this device.'
             : 'Everything is saved privately on this device.'}
       </p>
+    </div>
+  )
+}
+
+/** Starts on this phone from a saved backup ZIP — everything comes back: stories, recordings, tree, medical, keepsakes. */
+function RestoreStep({ onAccess }: { onAccess: (a: Access) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState('')
+  const [error, setError] = useState('')
+  const [done, setDone] = useState<{ text: string; name: string } | null>(null)
+  if (done) {
+    return (
+      <div className="stack">
+        <h2>Welcome back{done.name ? `, ${done.name.split(' ')[0]}` : ''}</h2>
+        <p className="success" role="status"><Icon name="check" size={16} /> {done.text}</p>
+        <button className="btn" onClick={() => onAccess(startLocalOwner(done.name || 'Me'))}>Open my plan</button>
+      </div>
+    )
+  }
+  return (
+    <div className="stack">
+      <h2>Bring back your plan</h2>
+      <p className="muted">Choose the backup you saved — the ZIP named “Simple Forever Plan backup…”. Look in Files, iCloud Drive, Google Drive, Downloads or your email.</p>
+      <FileButton className="btn" label={busy ? 'Bringing it back…' : 'Choose my backup file'} accept=".zip,application/zip,application/json,.json"
+        onFile={async (f) => {
+          setBusy(true); setError('')
+          try {
+            const r = await restoreBackup(f, localStore, setProgress)
+            setDone({ text: restoreSummary(r).replace(' on this phone was removed', ' was lost'), name: r.name ?? '' })
+          } catch (e: any) { setError(e?.message ?? 'Couldn’t open that file.') }
+          setBusy(false); setProgress('')
+        }} />
+      {progress && <p className="muted small" role="status">{progress}</p>}
+      {error && <p className="error">{error}</p>}
+      <p className="muted small">Your backup stays private — it’s opened right here on this phone.</p>
     </div>
   )
 }

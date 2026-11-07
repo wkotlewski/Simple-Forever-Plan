@@ -63,13 +63,18 @@ export const clearHash = () => history.replaceState(null, '', window.location.pa
 /** A text-message link. iPhone and Android both understand `sms:number?&body=`. */
 export const smsLink = (phone: string, body: string) => `sms:${phone.replace(/[^\d+]/g, '')}?&body=${encodeURIComponent(body)}`
 
-export function askMessage(p: AskPayload) {
+/**
+ * The text a relative gets. It always says who's asking, what the app is and why — then the question.
+ * `why` names what the answer is for (the family health history, the family tree, a chapter of the story).
+ */
+export function askMessage(p: AskPayload, why?: string) {
   const from = p.from.split(' ')[0]
   return [
-    `Hi ${p.to}! ${from} is writing down family stories and could use your memory on one question:`,
+    `Hi ${p.to}! It’s ${from}. I’m using Simple Forever Plan — an app for keeping our family’s stories, health history and family tree together in one place, so they’re never lost and can be passed down.`,
+    `I’m working on ${why || 'my life story'}, and you may remember this better than I do:`,
     `“${p.q}”`,
     p.note ? p.note : '',
-    `You can type or just talk — tap here to answer: ${askLink(p)}`,
+    `Tap here to answer — type it or just talk. No app or sign-up needed: ${askLink(p)}`,
   ].filter(Boolean).join('\n\n')
 }
 

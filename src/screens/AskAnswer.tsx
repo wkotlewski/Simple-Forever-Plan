@@ -9,7 +9,8 @@ import { Icon } from '../components/ui'
  * typing or talking, and a button to text the answer back. No sign-up, nothing saved on their phone.
  */
 export default function AskAnswer({ ask, onDone }: { ask: AskPayload; onDone: () => void }) {
-  const [name, setName] = useState(ask.to)
+  // A question pasted into a family thread goes to “everyone” — each person types their own name.
+  const [name, setName] = useState(ask.to === 'everyone' ? '' : ask.to)
   const [text, setText] = useState('')
   const [audio, setAudio] = useState<File | null>(null)
   const [audioUrl, setAudioUrl] = useState('')

@@ -1,85 +1,58 @@
 # Simple Forever Plan
 
-A phone-first app for telling your life story — and leaving your family what they'll need — in your own words and voice.
+A family keepsake app for telling your life story and leaving your family what they'll need, in your own words and voice. Record your stories, keep a medical binder your family can understand, build the family tree, and save the scripture, songs and words you want them to have.
 
-- **My Story** — a gentle interview, chapter by chapter (Where I Come From, Growing Up, Love & Family, Work & Purpose, Faith, Hard Times, Joys, Words to Keep). Answer by talking, recording video, writing, or uploading. Any question can be skipped. Speech is written down as you talk (where the browser supports it) and can be corrected.
-- **Ask someone who knows** — on any question, text a relative who remembers more. They tap the link, answer by typing or talking (their speech is written down), and text it back. Tapping their reply adds it to the story, credited to them ("Aunt Maria remembers…"), with their voice recording if they sent one. With the answer mailbox connected (below), they just tap **Send** and the answer — voice recording included — shows up the next time the storyteller opens the app; otherwise it travels back inside a text message.
-- **Chapters → book, audiobook, podcast** — answers become a written chapter using only what was said (Claude when the backend is connected; a faithful arrangement of your own words otherwise). Choose first person ("I") or biography. Print or save the whole book as a PDF, have it read aloud, or play a chapter's recordings back-to-back in the storyteller's own voice.
-- **Found in your story** — after each answer, the app spots scripture references, songs and hymns that mattered, and people (family, people you mentored, mentors, friends) and offers to add them: verses go to Words to Keep with their text (KJV, editable), songs go there with why they mattered, family goes onto the tree next to you, and others go to People Who Mattered. Nothing is added without a tap, and anything can be waved off.
-- **Medical Binder** — labeled sections (Allergies, Medications, Conditions, Doctors & Care Team, Medical History, Insurance & Documents, Care Wishes). Snap the pill bottle, upload doctor's notes, or leave a voice note. An "At a glance" card shows allergies, meds and who to call, and prints as a one-pager.
-- **Family Tree** — add people with photos, years and notes, connect parents, children, partners and siblings, and see everyone laid out by generation.
-- **Words to Keep** — scripture, quotes, advice and letters tagged "open when…" (hard days, grief, wedding, new baby, graduation…). Interview answers in the faith, hard-times and legacy chapters can be saved here in one tap.
-- **Where it's saved** — on the person's phone by default; nothing leaves the phone unless they choose. Anytime, they can **save a copy** to any app (Files, iCloud Drive, Google Drive, Dropbox, email) or **as a spreadsheet** for Google Sheets, Numbers or Excel, and **restore** a copy on a new phone. They can also choose to keep the plan in **their own Google Drive** after agreeing to a plain-language consent screen.
-- **Share with family** — invite people by email or phone. They open the plan by entering a code sent to them, and only see the medical binder if you allow it. Drafts stay private until you share a chapter.
+Works in any browser on a phone, tablet or computer. Nothing to install. Everything stays on your phone.
 
-## Run it
+## Open the app
 
-```bash
-npm install
-npm run dev
-```
+Open it at **https://wkotlewski.github.io/Simple-Forever-Plan/**
 
-With no settings it runs in **this-device mode**: everything is saved privately in the browser, and family codes are created on the spot and sent from your own Messages or Mail app. Family can open the plan on that same device.
+On a phone, use **Add to Home Screen** so it opens like an app.
 
-## Saving to Google Drive (optional)
+## My Story
 
-People only see this option after you add a Google OAuth client ID, and they must tick "I agree" before anything is saved. The app asks for the narrow `drive.file` permission, so it can only see the one folder it creates ("Simple Forever Plan": a JSON file per section plus a "Recordings & Photos" folder), never anything else in their Drive.
+- **A gentle interview, chapter by chapter**: Where I Come From, Growing Up, Love & Family, Work & Purpose, Faith, Hard Times, Joys, and Words to Keep. Skip any question.
+- **Answer however you like**: talk, record a video, type, or upload a photo. Your words are written down while you talk.
+- **Get the words for any recording**: send it to your own AI app (ChatGPT, Gemini…), paste back what it writes, and fix anything while you listen.
+- **Your story becomes a book**: answers turn into chapters, then a book you can print, save as a PDF, or have read aloud.
+- **Found in your story**: scripture, songs and people you mention are offered for Words to Keep and the family tree, one tap each.
 
-1. In [Google Cloud Console](https://console.cloud.google.com), create a project and enable the **Google Drive API**.
-2. **OAuth consent screen:** app name "Simple Forever Plan", your support email, and add the scope `.../auth/drive.file`. While testing, add your Google account(s) as test users; publish the app when you're ready for everyone.
-3. **Credentials → Create credentials → OAuth client ID → Web application.** Under *Authorized JavaScript origins* add where the app runs, e.g. `http://localhost:5173` and `https://wkotlewski.github.io`.
-4. Put the client ID in `.env.local` as `VITE_GOOGLE_CLIENT_ID` (and as a repository variable of the same name for GitHub Pages).
+## Ask family
 
-If someone starts on the phone and later switches to Drive, everything (recordings included) is moved into their Drive and removed from the phone. People can disconnect in the app or in their Google Account under Security → Third-party connections; their files stay in their Drive.
+Don't remember a detail? Someone else might.
 
-## Answer mailbox for "Ask someone who knows" (Supabase)
+- **Ask any question**: the app writes the text for you, including what the app is and why you're asking. Pick people from your contacts, choose several at once, or copy the message into a family group chat.
+- **They answer from a link**: typing or talking, no app or sign-up. They tap **Send** and it shows up in your app with their name on it.
+- **Surveys**: send the whole family health history, or a few easy steps to fill in the family tree, in one link. They answer what they know, skip the rest, and can come back to add more.
+- **You stay in charge**: see everything you've sent, cancel a request, or remove any answer.
 
-Lets relatives tap **Send** instead of texting their answer back. Plans still stay on each person's phone; only answers waiting to be picked up pass through Supabase, and they're deleted once saved.
+## Medical Binder
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. SQL Editor → New query → paste [`supabase/inbox.sql`](supabase/inbox.sql) → Run.
-3. Put the Project URL and publishable (anon) key in `.env.production` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. These are meant to be public; the script only lets relatives drop answers in, and only the storyteller's phone (which holds a private key) can read them.
+- **Labeled sections**: allergies, medications, conditions, doctors, medical history, insurance and care wishes. Snap a pill bottle, upload a doctor's note, or leave a voice note.
+- **At a glance**: a one-page card with allergies, medications and who to call. It prints.
+- **Family health history**: the questions doctors ask, answered by you or by family.
+- **Document summaries**: send a lab result or discharge paper to your AI app and get a plain-language summary back, with what's worth a closer look, what looks good, and questions for the doctor.
 
-## Story writer and "Your story so far" (Supabase + OpenAI)
+## Family Tree
 
-Turns answers into chapters that read like a loving eulogy — clear and smooth, never invented — and writes a life overview with a list of facts to confirm or fix (fixes are followed in every chapter). Rewrites keep earlier versions.
+- **Add the whole family at once**: talk or type it the way you'd tell a friend, or bring in a family tree file, document, recording or picture. Check everything before it's added.
+- **Connect people**: parents, children, partners, brothers and sisters, with suggestions based on who's already connected.
+- **In your stories**: open anyone to see what you've said about them, and keep it in their notes.
+- **People Who Mattered**: mentors, friends and people you mentored.
 
-1. After `inbox.sql`, also run [`supabase/writer.sql`](supabase/writer.sql) in the SQL Editor (a daily limit so no one else can use your key).
-2. Edge Functions → Deploy a new function → Via Editor → name `story` → paste [`supabase/functions/story/index.ts`](supabase/functions/story/index.ts) → Deploy. In the function's settings, turn **off** "Verify JWT" (it checks the storyteller's private key itself).
-3. Get an API key at [platform.openai.com](https://platform.openai.com) (add a little credit and set a monthly budget), then Edge Functions → Secrets → add `OPENAI_API_KEY`. Optional: `OPENAI_MODEL` to use a different model (default `gpt-5.5`). An `ANTHROPIC_API_KEY` works instead, if you prefer Claude.
+## Words to Keep
 
-## Turn on family sharing across devices (Supabase accounts)
+- **Scripture, songs, quotes, advice and letters**, tagged "open when…": hard days, grief, a wedding, a new baby, graduation.
+- **Scripture**: type the reference to see the words, or type the words you remember to find the verse.
+- **Songs**: paste a YouTube, Spotify or Apple Music link. The title and singer fill in, and family can play it right there.
+- **Quotes**: type the quote to see who said it, or a name to pick from their quotes.
 
-Also set `VITE_ENABLE_ACCOUNTS=true` for this mode.
+## Private by design
 
-
-1. Create a project at [supabase.com](https://supabase.com).
-2. In the SQL editor, run [`supabase/schema.sql`](supabase/schema.sql). It creates the tables, the privacy rules (family read-only, medical hidden unless allowed) and a private file bucket.
-3. **Sign-in codes:** Authentication → Providers → turn on **Email** (set the email template to show `{{ .Token }}` so people get a 6-digit code rather than a link) and **Phone** with Twilio for texts.
-4. **Story writer:** `supabase functions deploy story` and `supabase secrets set ANTHROPIC_API_KEY=...`
-5. **Invite notices (optional):** `supabase functions deploy invite`, then set `APP_URL` plus Resend (email) and/or Twilio (text) secrets — see the top of [`supabase/functions/invite/index.ts`](supabase/functions/invite/index.ts).
-6. Copy `.env.example` to `.env.local` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-
-## Deploy
-
-Live at https://wkotlewski.github.io/Simple-Forever-Plan/ . GitHub Pages serves the `main` branch (Settings → Pages → Deploy from a branch → main / root). On every push, a workflow builds the app into the `app/` folder and commits it, and the main page forwards there. To use the backend there, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` under Settings → Secrets and variables → Actions → **Variables**.
-
-## How it's built
-
-React + TypeScript + Vite. Every screen talks to one small storage interface ([`src/lib/store.ts`](src/lib/store.ts)) with two implementations: IndexedDB for this-device mode and Supabase (Postgres + Storage) for cloud mode. Recording uses the browser's MediaRecorder; live transcription uses the Web Speech API where available.
-
-| Folder | What's in it |
-| --- | --- |
-| `src/screens` | Welcome/sign-in, Home, Interview, Story & chapters, Book, Medical, Family Tree, Words to Keep, Share |
-| `src/lib` | Storage, sign-in and access codes, interview questions, chapter writer, recorder, tree layout |
-| `supabase` | Database schema and privacy rules, `story` and `invite` functions |
-
-## Ideas for next
-
-- Server-side transcription for browsers without live speech recognition (Safari on older iPhones, uploaded files)
-- AI follow-up questions tailored to each answer
-- Exported audiobook file (stitching recordings and narrated chapters into one MP3)
-- Medication reminders for caregivers
-- Let family add their own memories and photos to the tree
+- **Your plan lives on your phone.** Someone opening the app on their own device sees a blank app, not yours.
+- **Save a backup anytime**: to Files, iCloud Drive, Google Drive or email, or as a spreadsheet. A reminder nudges you now and then.
+- **Bring it back on a new phone**: from the first screen, choose your backup and everything returns. Nothing already there is removed.
+- **What leaves your phone is up to you**: a question you send, a file you share with your AI app, or a backup you save.
 
 The medical binder helps families stay informed; it isn't a medical record. Always confirm medications with a doctor or pharmacist.

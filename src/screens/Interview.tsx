@@ -6,7 +6,7 @@ import { Transcribe } from '../components/Transcribe'
 import { canRecord, canTranscribe, clock, useRecorder } from '../lib/recorder'
 import { uid } from '../lib/store'
 import type { Answer } from '../lib/types'
-import { FileButton, Icon, Media, ScreenHeader } from '../components/ui'
+import { Icon, Media, ScreenHeader } from '../components/ui'
 import { AskSheet } from '../components/AskSheet'
 import { FollowUpAsk } from '../components/FollowUpAsk'
 import { TextField } from '../components/TextField'
@@ -59,6 +59,7 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
   const [justSaved, setJustSaved] = useState(false)
   const found = useSuggestions(existing ? [existing] : [])
   const rec = useRecorder()
+  const [removing, setRemoving] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => { if (videoRef.current && rec.stream) videoRef.current.srcObject = rec.stream }, [rec.stream])
@@ -70,12 +71,15 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
     await rec.start(kind)
   }
 
-  /** Saves what's in the editor onto this question. New words replace the text; a recording alone keeps the text that's there. */
-  async function persist(v: { text: string; media: string[]; keep: boolean; existing?: Answer }) {
+  /**
+   * Saves onto this question. Recordings and uploads are always added (never replace earlier ones).
+   * Edited words replace the text; the words from another recording are added after what's already there.
+   */
+  async function persist(v: { text: string; media: string[]; keep: boolean; existing?: Answer; append?: boolean }) {
     const text = v.text.trim()
     if (!text && !v.media.length) return
-    const prior = v.existing && !v.existing.skipped ? v.existing.text : ''
-    const joined = text || prior
+    const prior = v.existing && !v.existing.skipped ? v.existing.text.trim() : ''
+    const joined = v.append && prior && text ? `${prior}\n\n${text}` : text || prior
     const answer: Answer = {
       id: v.existing?.id ?? uid(),
       chapterId,
@@ -110,7 +114,7 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
     if (!out) return
     setBusy(true)
     const id = await store.putMedia(out.blob)
-    const saved = await persist({ text: out.transcript, media: [id], keep: false, existing })
+    const saved = await persist({ text: out.transcript, media: [id], keep: false, existing, append: true })
     // Keep the editor open on the saved text so it can be corrected; it's already safe.
     setDraft(saved?.text ?? out.transcript)
     setPendingMedia([])
@@ -122,10 +126,13 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
     setBusy(false)
   }
 
-  async function upload(file: File) {
+  async function upload(files: File[]) {
+    if (!files.length) return
     setBusy(true)
-    const id = await store.putMedia(file)
-    await persist({ text: '', media: [id], keep: false, existing })
+    const ids: string[] = []
+    for (const f of files) ids.push(await store.putMedia(f))
+    const saved = await persist({ text: '', media: ids, keep: false, existing })
+    setDraft(saved?.text ?? '')
     setMode((m) => m ?? 'write')
     setJustSaved(true)
     setBusy(false)
@@ -156,7 +163,18 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
         <div className="saved-answer">
           <p className="label"><Icon name="check" size={16} /> Saved</p>
           {existing.text && <p className="answer-text">{existing.text}</p>}
-          <div className="media-stack">{existing.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
+          <div className="media-stack">{existing.mediaIds.map((m) => (
+            <div key={m} className="media-item">
+              <Media id={m} />
+              {existing.mediaIds.length > 1 && (removing === m ? (
+                <span className="row">
+                  <button className="link-btn small danger-text" onClick={async () => { await save('answers', { ...existing, mediaIds: existing.mediaIds.filter((x) => x !== m) }); setRemoving(null) }}>Remove it</button>
+                  <button className="link-btn small" onClick={() => setRemoving(null)}>Keep</button>
+                </span>
+              ) : <button className="link-btn small" onClick={() => setRemoving(m)}>Remove</button>)}
+            </div>
+          ))}</div>
+          {existing.mediaIds.length > 1 && <p className="muted small">{existing.mediaIds.length} recordings and files on this answer.</p>}
           <Transcribe answer={existing} />
           <FollowUpAsk answer={existing} />
         </div>
@@ -203,11 +221,15 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
 
       {!mode && rec.state !== 'recording' && (
         <>
+          {answered && <p className="label add-more-label">Add more to this answer — another recording, video, photos or words</p>}
           <div className="answer-options">
-            {canRecord && <button className="option" onClick={() => startRecording('audio')}><Icon name="mic" size={26} />Talk</button>}
-            {canRecord && <button className="option" onClick={() => startRecording('video')}><Icon name="video" size={26} />Video</button>}
-            <button className="option" onClick={() => setMode('write')}><Icon name="type" size={26} />Write</button>
-            <FileButton className="option" label="Upload" icon="upload" accept="audio/*,video/*,image/*" onFile={upload} />
+            {canRecord && <button className="option" onClick={() => startRecording('audio')}><Icon name="mic" size={26} />{answered ? 'Talk more' : 'Talk'}</button>}
+            {canRecord && <button className="option" onClick={() => startRecording('video')}><Icon name="video" size={26} />{answered ? 'Add video' : 'Video'}</button>}
+            <button className="option" onClick={() => { if (answered) setDraft(existing.text); setMode('write') }}><Icon name="type" size={26} />{answered ? 'Edit words' : 'Write'}</button>
+            <label className="option">
+              <Icon name="upload" size={26} />{busy ? 'Adding…' : answered ? 'Add files' : 'Upload'}
+              <input type="file" accept="audio/*,video/*,image/*" multiple hidden onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ''; upload(f) }} />
+            </label>
           </div>
           <button className="btn secondary ask-btn" onClick={() => setAsking(true)}>
             <Icon name="share" size={18} /> Ask someone who knows

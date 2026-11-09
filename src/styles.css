@@ -571,3 +571,6 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .keepsake-text.memory-story { font-style: normal; font-family: inherit; font-size: 16px; line-height: 1.55; }
 .followup-card { border: 1px dashed var(--brand); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .followup-card p { margin: 0; }
+.media-item { display: flex; flex-direction: column; gap: 4px; }
+.media-item .link-btn { align-self: flex-end; }
+.add-more-label { margin-top: 8px; }

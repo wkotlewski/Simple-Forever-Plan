@@ -8,7 +8,8 @@ import type { Answer } from '../lib/types'
 import { TextField } from './TextField'
 import { Icon, Sheet } from './ui'
 
-const recordingOf = (a: Answer) => a.mediaIds.find((m) => mediaKind(m) === 'audio' || mediaKind(m) === 'video')
+const recordingsOf = (a: Answer) => a.mediaIds.filter((m) => mediaKind(m) === 'audio' || mediaKind(m) === 'video')
+const recordingOf = (a: Answer) => recordingsOf(a)[0]
 
 /** Answers with a recording but no words yet (for example, recordings put back after they were lost). */
 export const needsWords = (answers: Answer[]) => answers.filter((a) => !a.skipped && recordingOf(a) && !a.text.trim())
@@ -75,7 +76,10 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
   const [text, setText] = useState('')
   const [saved, setSaved] = useState(0)
   const answer = answers[i] ? data.answers.find((a) => a.id === answers[i].id) ?? answers[i] : undefined
-  const media = answer && recordingOf(answer)
+  // An answer can have several recordings: pick which one to send.
+  const [which, setWhich] = useState(0)
+  const recs = answer ? recordingsOf(answer) : []
+  const media = recs[Math.min(which, recs.length - 1)]
   const prompt = answer ? transcriptPrompt(answer) : ''
 
   // Get the file ready before the tap — phones only open the share sheet right after a tap.
@@ -115,6 +119,12 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
     <Sheet title={answers.length > 1 ? `Get the words · ${i + 1} of ${answers.length}` : 'Get the words'} onClose={onClose}>
       <div className="stack">
         <p className="label">{answer.question}</p>
+        {recs.length > 1 && (
+          <div className="chips">{recs.map((m, i) => (
+            <button type="button" key={m} className={`chip ${media === m ? 'on' : ''}`} onClick={() => setWhich(i)}>Recording {i + 1}</button>
+          ))}</div>
+        )}
+        {recs.length > 1 && <p className="muted small">Do one recording at a time — paste each one’s words after the others in the box below.</p>}
         {url && (mediaKind(media) === 'video'
           ? <video src={url} controls playsInline className="transcribe-player" />
           : <audio src={url} controls className="transcribe-player" />)}
@@ -125,7 +135,7 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
         <div className="row wrap">
           <button className="btn" disabled={!text.trim() || text.trim() === answer.text.trim()} onClick={async () => {
             await save('answers', { ...answer, text: text.trim() })
-            setSaved((n) => n + 1); setI(i + 1)
+            setSaved((n) => n + 1); setI(i + 1); setWhich(0)
           }}>Save the words{answers.length > i + 1 ? ' and go to the next' : ''}</button>
           <button className="btn ghost" onClick={() => setI(i + 1)}>{answers.length > i + 1 ? 'Skip for now' : answer.text.trim() ? 'Keep what I had' : 'Not now'}</button>
         </div>

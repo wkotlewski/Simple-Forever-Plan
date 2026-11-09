@@ -39,15 +39,21 @@ export interface Survey {
   items: { question: string; label: string; target: Ask['target']; checked?: boolean; historyIndex?: number }[]
 }
 
-export function AskSheet({ chapterId, questionId, target, question, suggestions, survey, onClose }: {
+export function AskSheet({ chapterId, questionId, target, question, suggestions, survey, to, onClose }: {
   chapterId?: string; questionId?: string; target?: Ask['target']; question: string; suggestions?: (string | Draft)[]
   /** Send several questions in one link instead of one question. */
   survey?: Survey
+  /** Who to ask, when it's already known (e.g. "Mom" from "I need to ask my mom"). Their number is filled in if you've asked them before. */
+  to?: string
   onClose: () => void
 }) {
   const { data, save, settings, session } = useData()
   const [q, setQ] = useState(question)
-  const [people, setPeople] = useState<Recipient[]>([{ name: '', phone: '' }])
+  const [people, setPeople] = useState<Recipient[]>(() => {
+    if (!to) return [{ name: '', phone: '' }]
+    const before = [...data.asks].sort((x, y) => y.sentAt - x.sentAt).find((a) => a.toName.toLowerCase() === to.toLowerCase() && a.toPhone)
+    return [{ name: to, phone: before?.toPhone ?? '' }]
+  })
   const [note, setNote] = useState('')
   const [mine, setMine] = useState(settings.phone ?? '')
   const [sent, setSent] = useState<{ ask: Ask; asks: Ask[]; message: string; texted: boolean }[] | null>(null)

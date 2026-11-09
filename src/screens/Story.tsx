@@ -15,6 +15,7 @@ import { Empty, Icon, Media, ScreenHeader } from '../components/ui'
 import Interview from './Interview'
 import Book from './Book'
 import { Contributions, PasteReply } from '../components/AskSheet'
+import { FollowUpAsk } from '../components/FollowUpAsk'
 import { offerReply } from '../lib/ask'
 
 type View = { kind: 'list' } | { kind: 'interview'; id: string } | { kind: 'chapter'; id: string } | { kind: 'book' } | { kind: 'summary' }
@@ -256,6 +257,7 @@ function Recordings({ answers }: { answers: Answer[] }) {
           {a.text && <p className="answer-text">{a.text}</p>}
           <div className="media-stack">{a.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
           {isOwner && <Transcribe answer={a} />}
+          <FollowUpAsk answer={a} />
           <ItemDocs docs={listDocuments({ medical: [], answers: [a] }).filter((d) => isOwner || d.summary)} onSummarize={setSummarizing} subtle />
           <Contributions items={a.contributions} />
         </article>

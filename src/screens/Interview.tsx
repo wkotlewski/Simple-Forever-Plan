@@ -8,6 +8,7 @@ import { uid } from '../lib/store'
 import type { Answer } from '../lib/types'
 import { FileButton, Icon, Media, ScreenHeader } from '../components/ui'
 import { AskSheet } from '../components/AskSheet'
+import { FollowUpAsk } from '../components/FollowUpAsk'
 import { TextField } from '../components/TextField'
 import { SuggestionList, useSuggestions } from '../components/Suggestions'
 
@@ -157,6 +158,7 @@ function QuestionCard({ chapterId, question: q, onNext, nested }: { chapterId: s
           {existing.text && <p className="answer-text">{existing.text}</p>}
           <div className="media-stack">{existing.mediaIds.map((m) => <Media key={m} id={m} />)}</div>
           <Transcribe answer={existing} />
+          <FollowUpAsk answer={existing} />
         </div>
       )}
 

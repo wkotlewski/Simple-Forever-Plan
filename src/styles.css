@@ -556,3 +556,8 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .tree-person { display: flex; flex-direction: column; gap: 6px; }
 .tree-person .grid2 input { font-size: 16px; }
 .tree-reply-text { line-height: 1.6; margin: 0; }
+/* Sending to an AI app, step by step */
+.ai-send .ai-step { display: flex; gap: 10px; align-items: flex-start; }
+.ai-send .ai-num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--brand); color: var(--on-brand, #fff); font-size: 13px; font-weight: 700; display: grid; place-items: center; margin-top: 2px; }
+.ai-send .ai-prompt { width: 100%; font-size: 14px; border-radius: 10px; padding: 10px; border: 1px solid var(--line); background: var(--card-2, transparent); color: inherit; }
+.ai-send .grow { flex: 1; min-width: 0; }

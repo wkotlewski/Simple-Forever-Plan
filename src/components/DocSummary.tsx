@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useData } from '../lib/data'
 import { docPrompt, parseDocSummary, type DocRef } from '../lib/docSummary'
-import { shareToAi } from '../lib/aiShare'
+import { AiSend } from './AiSend'
 import type { DocSummary } from '../lib/types'
 import { Icon, Media, Sheet } from './ui'
 import { TextField } from './TextField'
@@ -59,7 +59,6 @@ export function SummarizeSheet({ docs, onClose }: { docs: DocRef[]; onClose: () 
   const [i, setI] = useState(0)
   const [file, setFile] = useState<File | null>(null)
   const [pasted, setPasted] = useState('')
-  const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(0)
   const doc = docs[i]
@@ -69,7 +68,7 @@ export function SummarizeSheet({ docs, onClose }: { docs: DocRef[]; onClose: () 
   useEffect(() => {
     if (!doc) return
     let live = true
-    setFile(null); setPasted(''); setNote(''); setError('')
+    setFile(null); setPasted(''); setError('')
     ;(async () => {
       const url = await store.mediaUrl(doc.mediaId)
       if (!url) return
@@ -93,13 +92,6 @@ export function SummarizeSheet({ docs, onClose }: { docs: DocRef[]; onClose: () 
     )
   }
 
-  async function send() {
-    setError('')
-    if (!file) { setError('Couldn’t open this document.'); return }
-    const r = await shareToAi(file, prompt)
-    if (r === 'shared') setNote('Document sent. Now paste the instructions in the message box (they’re copied) and send.')
-    if (r === 'saved') setNote('Document saved and instructions copied. In your AI app, attach the document, paste the instructions, and send.')
-  }
 
   async function keep() {
     const s = parseDocSummary(pasted, doc.mediaId)
@@ -125,20 +117,10 @@ export function SummarizeSheet({ docs, onClose }: { docs: DocRef[]; onClose: () 
           <div><p className="label">{doc.medical ? 'Medical binder' : 'Your story'}</p><strong>{doc.label}</strong></div>
         </div>
 
-        <ol className="ai-list">
-          <li>
-            <span>Send this document to your AI app (ChatGPT, Claude, Gemini…) with instructions to {doc.medical ? 'explain it simply and point out what’s worth a closer look and what looks good' : 'summarize it'}.</span>
-            <div className="row wrap">
-              <button className="btn small" disabled={!file} onClick={send}><Icon name="share" size={16} /> Send to my AI app</button>
-              <button className="btn ghost small" onClick={() => navigator.clipboard?.writeText(prompt).then(() => setNote('Instructions copied.')).catch(() => null)}>Copy instructions</button>
-            </div>
-            {note && <p className="muted small">{note}</p>}
-          </li>
-          <li>
+        <AiSend file={file} prompt={prompt} what="document">
             <span>Copy its answer and paste it here.</span>
             <TextField id="doc-summary-paste" multiline rows={6} label="Your AI app’s answer" value={pasted} onChange={setPasted} placeholder="Paste the answer here" />
-          </li>
-        </ol>
+        </AiSend>
 
         {preview && <DocSummaryView s={preview} medical={doc.medical} />}
         {error && <p className="error">{error}</p>}

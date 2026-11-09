@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useData } from '../lib/data'
 import { mediaKind } from '../lib/store'
-import { saveToApp } from '../lib/backup'
-import { shareToAi, toSpeechWav } from '../lib/aiShare'
+import { toSpeechWav } from '../lib/aiShare'
+import { AiSend } from './AiSend'
 import { CHAPTERS } from '../lib/questions'
 import type { Answer } from '../lib/types'
 import { TextField } from './TextField'
@@ -73,7 +73,6 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
   const [file, setFile] = useState<File | null>(null)
   const [url, setUrl] = useState<string | null>(null)
   const [text, setText] = useState('')
-  const [note, setNote] = useState('')
   const [saved, setSaved] = useState(0)
   const answer = answers[i] ? data.answers.find((a) => a.id === answers[i].id) ?? answers[i] : undefined
   const media = answer && recordingOf(answer)
@@ -83,7 +82,7 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
   useEffect(() => {
     if (!answer || !media) return
     let live = true
-    setFile(null); setUrl(null); setText(answer.text); setNote('')
+    setFile(null); setUrl(null); setText(answer.text)
     ;(async () => {
       const u = await store.mediaUrl(media)
       if (!u || !live) return
@@ -111,12 +110,6 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
     )
   }
 
-  async function send() {
-    if (!file) return
-    const r = await shareToAi(file, prompt)
-    if (r === 'shared') setNote('Recording sent. Now paste the instructions in the message box (they’re copied) and send.')
-    if (r === 'saved') setNote('Recording saved and instructions copied. In your AI app, attach the recording, paste the instructions, and send.')
-  }
 
   return (
     <Sheet title={answers.length > 1 ? `Get the words · ${i + 1} of ${answers.length}` : 'Get the words'} onClose={onClose}>
@@ -125,21 +118,10 @@ export function TranscriptSheet({ answers, onClose }: { answers: Answer[]; onClo
         {url && (mediaKind(media) === 'video'
           ? <video src={url} controls playsInline className="transcribe-player" />
           : <audio src={url} controls className="transcribe-player" />)}
-        <ol className="ai-list">
-          <li>
-            <span>Send this recording to your AI app — the instructions are copied at the same time, so just paste them in the message box and send. Gemini and ChatGPT take recordings.</span>
-            <div className="row wrap">
-              <button className="btn small" disabled={!file} onClick={send}><Icon name="share" size={16} /> {file ? 'Send to my AI app' : 'Getting the recording ready…'}</button>
-              {file && <button className="btn ghost small" onClick={async () => { const r = await saveToApp(file, { afterTap: true }); if (r !== 'cancelled') setNote('Recording saved. Attach it in your AI app.') }}>Save the recording</button>}
-              <button className="btn ghost small" onClick={() => navigator.clipboard?.writeText(prompt).then(() => setNote('Instructions copied.')).catch(() => null)}>Copy instructions</button>
-            </div>
-            {note && <p className="muted small">{note}</p>}
-          </li>
-          <li>
-            <span>Copy the words it writes, paste them here, and fix anything that’s off while you listen.</span>
+        <AiSend file={file} prompt={prompt} what="recording">
+            <span>Copy the words your AI app writes, paste them here, and fix anything that’s off while you listen.</span>
             <TextField id={`transcript-${answer.id}`} multiline rows={7} label="What you said" value={text} onChange={setText} placeholder="Paste the words here — or type, or tap the microphone and say them." />
-          </li>
-        </ol>
+        </AiSend>
         <div className="row wrap">
           <button className="btn" disabled={!text.trim() || text.trim() === answer.text.trim()} onClick={async () => {
             await save('answers', { ...answer, text: text.trim() })

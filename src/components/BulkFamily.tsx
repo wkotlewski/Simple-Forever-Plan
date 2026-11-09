@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useData } from '../lib/data'
-import { shareToAi, toSpeechWav } from '../lib/aiShare'
+import { toSpeechWav } from '../lib/aiShare'
+import { AiSend } from './AiSend'
 import { docxText, parseFamilyText, parseGedcom, TREE_PICTURE_PROMPT, type FamilyDraft } from '../lib/familyParse'
 import { applyFamilyDraft, type DraftChoices } from '../lib/familyApply'
 import { TextField } from './TextField'
@@ -36,8 +37,6 @@ export function BulkFamily({ onClose, initialText, intro, onAdded }: {
   const [busy, setBusy] = useState(false)
   // A picture or recording that needs the person's AI app to turn it into words.
   const [aiFile, setAiFile] = useState<{ file: File; kind: 'picture' | 'recording' } | null>(null)
-  const [aiNote, setAiNote] = useState('')
-  const [copied, setCopied] = useState(false)
 
   function review(d: FamilyDraft) {
     if (!d.people.some((p) => !p.isSelf) && !d.links.length) {
@@ -54,7 +53,7 @@ export function BulkFamily({ onClose, initialText, intro, onAdded }: {
   }
 
   async function openFile(f: File) {
-    setError(''); setStatus(''); setAiFile(null); setAiNote('')
+    setError(''); setStatus(''); setAiFile(null)
     const n = f.name.toLowerCase()
     try {
       if (n.endsWith('.ged')) { review(parseGedcom(await f.text(), ctx)); return }
@@ -131,18 +130,7 @@ export function BulkFamily({ onClose, initialText, intro, onAdded }: {
           <div className="card inset stack">
             <h3>{aiFile.kind === 'picture' ? 'Reading a picture of a tree' : 'Writing out your recording'}</h3>
             <p className="small">This needs your AI app’s help (ChatGPT, Gemini, Claude…). Send it with the instructions, then copy what it writes, paste it into the box above, and tap <strong>Read my family</strong>.</p>
-            <div className="row wrap">
-              <button className="btn small" onClick={async () => {
-                const prompt = aiFile.kind === 'picture' ? TREE_PICTURE_PROMPT : RECORDING_PROMPT
-                const r = await shareToAi(aiFile.file, prompt)
-                if (r === 'shared') setAiNote('Sent. Now paste the instructions in the message box (they’re copied) and send.')
-                if (r === 'saved') setAiNote('Saved and instructions copied. In your AI app, attach the file, paste, and send.')
-              }}><Icon name="share" size={16} /> Send to my AI app</button>
-              <button className="btn ghost small" onClick={async () => {
-                try { await navigator.clipboard.writeText(aiFile.kind === 'picture' ? TREE_PICTURE_PROMPT : RECORDING_PROMPT); setCopied(true) } catch { setCopied(false) }
-              }}><Icon name={copied ? 'check' : 'type'} size={16} /> {copied ? 'Copied' : 'Copy instructions'}</button>
-            </div>
-            {aiNote && <p className="muted small">{aiNote}</p>}
+            <AiSend file={aiFile.file} prompt={aiFile.kind === 'picture' ? TREE_PICTURE_PROMPT : RECORDING_PROMPT} what={aiFile.kind === 'picture' ? 'picture' : 'recording'} />
           </div>
         )}
       </div>

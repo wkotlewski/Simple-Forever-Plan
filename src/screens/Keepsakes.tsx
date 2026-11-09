@@ -11,7 +11,8 @@ import { findSong, readListenLink, songInfo } from '../lib/listen'
 import { findVerse, looksLikeReference, TRANSLATIONS, versesFor, type TranslationId } from '../lib/scripture'
 import { quotesBy, whoSaid } from '../lib/quotes'
 
-const KINDS: Record<MessageKind, { label: string; source: string }> = {
+const KINDS: Record<MessageKind, { label: string; source: string; short?: string }> = {
+  memory: { label: 'Photo or video', short: 'Photo', source: 'When and where (optional)' },
   scripture: { label: 'Scripture', source: 'Book, chapter and verse (e.g. Psalm 23:4)' },
   song: { label: 'Song', source: 'Who sings it' },
   quote: { label: 'Quote', source: 'Who said it, or the book it’s from' },
@@ -64,7 +65,7 @@ export default function Keepsakes() {
       {!data.messages.length && (
         <Empty icon="quote" title={isOwner ? 'Leave words for the road ahead' : 'No messages yet'}>
           {isOwner && <>
-            <p>A favorite verse for hard days, a quote you live by, or a letter for a wedding or a new baby.</p>
+            <p>A favorite verse for hard days, a quote you live by, a letter for a wedding or a new baby — or a photo or video with the story behind it.</p>
             <button className="btn" onClick={() => setEditing('new')}><Icon name="plus" size={18} /> Add a message</button>
           </>}
         </Empty>
@@ -74,11 +75,17 @@ export default function Keepsakes() {
         {list.map((m) => (
           <article key={m.id} className={`card keepsake kind-${m.kind}`} onClick={() => isOwner && setEditing(m)} role={isOwner ? 'button' : undefined}>
             <span className="label">{KINDS[m.kind].label}{m.forWhom ? ` · for ${m.forWhom}` : ''}</span>
-            <p className="keepsake-text">{m.text}</p>
+            {m.kind === 'memory' && m.mediaIds.length > 0 && (
+              <div className="memory-media" onClick={(e) => e.stopPropagation()}>{m.mediaIds.map((id) => <Media key={id} id={id} />)}</div>
+            )}
+            {m.kind === 'memory' && !!m.people?.length && (
+              <p className="small muted">With {m.people.map((id) => data.people.find((p) => p.id === id)?.name).filter(Boolean).join(', ')}</p>
+            )}
+            <p className={`keepsake-text ${m.kind === 'memory' ? 'memory-story' : ''}`}>{m.text}</p>
             {m.source && <p className="keepsake-source">— {m.source}</p>}
             {m.note && <p className="keepsake-note">{m.note}</p>}
             {m.kind === 'song' && <SongPlayer title={m.text} artist={m.source} link={m.link} />}
-            {m.mediaIds.length > 0 && <div className="media-stack" onClick={(e) => e.stopPropagation()}>{m.mediaIds.map((id) => <Media key={id} id={id} />)}</div>}
+            {m.kind !== 'memory' && m.mediaIds.length > 0 && <div className="media-stack" onClick={(e) => e.stopPropagation()}>{m.mediaIds.map((id) => <Media key={id} id={id} />)}</div>}
             <div className="chips small">{m.occasions.map((o) => <span key={o} className="chip quiet">{o}</span>)}</div>
           </article>
         ))}
@@ -205,7 +212,7 @@ function QuoteHelp({ f, setF }: Fill) {
 }
 
 function MessageSheet({ item, onClose }: { item: KeepsakeMessage | null; onClose: () => void }) {
-  const { save, remove, store } = useData()
+  const { data, save, remove, store } = useData()
   const [f, setF] = useState<KeepsakeMessage>(item ?? { id: uid(), kind: 'scripture', text: '', occasions: ['Hard days'], mediaIds: [], createdAt: Date.now() })
   // Paste a song link and the title and singer fill in (only empty boxes — nothing typed is replaced).
   const [filling, setFilling] = useState(false)
@@ -225,6 +232,7 @@ function MessageSheet({ item, onClose }: { item: KeepsakeMessage | null; onClose
     return () => { live = false; clearTimeout(t) }
   }, [f.link, f.kind]) // eslint-disable-line react-hooks/exhaustive-deps
   const rec = useRecorder()
+  const [adding, setAdding] = useState(false)
   const toggle = (o: string) => setF((x) => ({ ...x, occasions: x.occasions.includes(o) ? x.occasions.filter((y) => y !== o) : [...x.occasions, o] }))
 
   return (
@@ -232,12 +240,12 @@ function MessageSheet({ item, onClose }: { item: KeepsakeMessage | null; onClose
       <form className="stack" onSubmit={async (e) => {
         e.preventDefault()
         if (!f.text.trim() && !f.mediaIds.length) return
-        await save('messages', { ...f, text: f.text.trim(), occasions: f.occasions.length ? f.occasions : ['Anytime'] })
+        await save('messages', { ...f, text: f.text.trim(), occasions: f.occasions.length ? f.occasions : ['Anytime'], people: f.kind === 'memory' ? f.people : undefined })
         onClose()
       }}>
         <div className="segmented full">
           {(Object.keys(KINDS) as MessageKind[]).map((k) => (
-            <button type="button" key={k} className={f.kind === k ? 'on' : ''} onClick={() => setF({ ...f, kind: k })}>{KINDS[k].label}</button>
+            <button type="button" key={k} className={f.kind === k ? 'on' : ''} onClick={() => setF({ ...f, kind: k })}>{KINDS[k].short ?? KINDS[k].label}</button>
           ))}
         </div>
         {f.kind === 'song' && (
@@ -252,10 +260,46 @@ function MessageSheet({ item, onClose }: { item: KeepsakeMessage | null; onClose
             )}
           </div>
         )}
-        <TextField id="keep-text" multiline rows={f.kind === 'song' ? 1 : 5} autoFocus label={f.kind === 'scripture' ? 'The verse' : f.kind === 'song' ? 'Song title' : f.kind === 'quote' ? 'The quote' : 'Your message'}
+        {f.kind === 'memory' && (
+          <div className="stack tight">
+            {f.mediaIds.length > 0 && (
+              <div className="memory-grid">
+                {f.mediaIds.map((m) => (
+                  <div key={m} className="memory-thumb">
+                    <Media id={m} />
+                    <button type="button" className="icon-btn small" aria-label="Remove this photo or video" onClick={() => setF((x) => ({ ...x, mediaIds: x.mediaIds.filter((y) => y !== m) }))}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <label className={`btn ${f.mediaIds.length ? 'secondary' : ''}`}>
+              <Icon name="upload" size={20} /> {adding ? 'Adding…' : f.mediaIds.length ? 'Add more photos or videos' : 'Choose photos or videos'}
+              <input type="file" accept="image/*,video/*" multiple hidden onChange={async (e) => {
+                const files = [...(e.target.files ?? [])]
+                e.target.value = ''
+                if (!files.length) return
+                setAdding(true)
+                const ids: string[] = []
+                for (const file of files) ids.push(await store.putMedia(file))
+                setF((x) => ({ ...x, mediaIds: [...x.mediaIds, ...ids] }))
+                setAdding(false)
+              }} />
+            </label>
+          </div>
+        )}
+        <TextField id="keep-text" multiline rows={f.kind === 'song' ? 1 : 5} autoFocus={f.kind !== 'memory'} label={f.kind === 'memory' ? 'The story behind it' : f.kind === 'scripture' ? 'The verse' : f.kind === 'song' ? 'Song title' : f.kind === 'quote' ? 'The quote' : 'Your message'}
+          placeholder={f.kind === 'memory' ? 'What was happening, who was there, why it matters — type, or tap the microphone and tell it.' : undefined}
           value={f.text} onChange={(v) => setF({ ...f, text: v })} />
         {KINDS[f.kind].source && (
-          <TextField id="keep-source" label={KINDS[f.kind].source} value={f.source ?? ''} onChange={(v) => setF({ ...f, source: v })} />
+          <TextField id="keep-source" label={KINDS[f.kind].source} value={f.source ?? ''} onChange={(v) => setF({ ...f, source: v })} placeholder={f.kind === 'memory' ? 'e.g. Summer 1978, Lake Michigan' : undefined} />
+        )}
+        {f.kind === 'memory' && data.people.length > 0 && (
+          <div className="field"><span>Who’s in it? <small className="muted">(optional)</small></span>
+            <div className="chips">{data.people.map((p) => {
+              const on = f.people?.includes(p.id)
+              return <button type="button" key={p.id} className={`chip ${on ? 'on' : ''}`} onClick={() => setF((x) => ({ ...x, people: on ? (x.people ?? []).filter((y) => y !== p.id) : [...(x.people ?? []), p.id] }))}>{p.name}{p.isSelf ? ' (you)' : ''}</button>
+            })}</div>
+          </div>
         )}
         {f.kind === 'scripture' && <VerseHelp f={f} setF={setF} />}
         {f.kind === 'quote' && <QuoteHelp f={f} setF={setF} />}
@@ -270,12 +314,13 @@ function MessageSheet({ item, onClose }: { item: KeepsakeMessage | null; onClose
         </div>
         {canRecord && (
           <div className="row">
+            {f.kind === 'memory' && <span className="muted small">Or tell the story out loud:</span>}
             {rec.state === 'recording'
               ? <button type="button" className="btn danger" onClick={async () => { const out = await rec.stop(); if (out) { const id = await store.putMedia(out.blob); setF((x) => ({ ...x, mediaIds: [...x.mediaIds, id], text: x.text || out.transcript })) } }}><Icon name="stop" size={18} /> Stop {clock(rec.seconds)}</button>
               : <button type="button" className="btn secondary" onClick={() => rec.start('audio')}><Icon name="mic" size={18} /> Say it in your voice</button>}
           </div>
         )}
-        {f.mediaIds.length > 0 && <div className="media-stack">{f.mediaIds.map((m) => <Media key={m} id={m} />)}</div>}
+        {f.kind !== 'memory' && f.mediaIds.length > 0 && <div className="media-stack">{f.mediaIds.map((m) => <Media key={m} id={m} />)}</div>}
         <div className="row between">
           <button className="btn">Save</button>
           {item && <button type="button" className="btn ghost danger-text" onClick={async () => { await remove('messages', item.id); onClose() }}><Icon name="trash" size={18} /> Delete</button>}

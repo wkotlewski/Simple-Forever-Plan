@@ -296,6 +296,23 @@ function PersonSheet({ person, onClose, onOpen }: { person: Person | null; onClo
           {f.notes && <p className="notes">{f.notes}</p>}
           <Contributions items={person?.contributions} label="remembers" />
           {person && !person.isSelf && <StoryMentions person={person} />}
+          {person && (() => {
+            // Photos and videos from Keepsakes that this person is in.
+            const mem = data.messages.filter((m) => m.kind === 'memory' && m.people?.includes(person.id))
+            if (!mem.length) return null
+            return (
+              <section className="mentions stack">
+                <p className="label">Photos & videos</p>
+                {mem.map((m) => (
+                  <div key={m.id} className="mention stack tight">
+                    <div className="memory-grid">{m.mediaIds.slice(0, 3).map((id) => <div key={id} className="memory-thumb"><Media id={id} /></div>)}</div>
+                    {m.text && <p>{m.text.length > 220 ? `${m.text.slice(0, 220)}…` : m.text}</p>}
+                    {m.source && <small className="muted">{m.source}</small>}
+                  </div>
+                ))}
+              </section>
+            )
+          })()}
           {isOwner && person && <Waiting asks={data.asks.filter((a) => !a.answeredAt && a.target?.kind === 'person' && a.target.personId === person.id)} />}
           {rel && Object.entries(rel).filter(([, ids]) => ids.length).map(([label, ids]) => (
             <div key={label} className="rel-row">

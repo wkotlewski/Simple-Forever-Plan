@@ -120,7 +120,7 @@ export interface MedicalItem {
   docSummaries?: DocSummary[]
 }
 
-export type MessageKind = 'scripture' | 'song' | 'quote' | 'advice' | 'letter'
+export type MessageKind = 'memory' | 'scripture' | 'song' | 'quote' | 'advice' | 'letter'
 
 export interface KeepsakeMessage {
   id: ID
@@ -132,6 +132,8 @@ export interface KeepsakeMessage {
   note?: string
   /** For songs: a YouTube, Spotify or Apple Music link so family can listen. */
   link?: string
+  /** For photos and videos: who's in it (people on the family tree). */
+  people?: ID[]
   occasions: string[]
   mediaIds: ID[]
   createdAt: number

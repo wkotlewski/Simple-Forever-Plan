@@ -561,3 +561,11 @@ blockquote footer { font-size: 15px; color: var(--ink-soft); font-family: var(--
 .ai-send .ai-num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--brand); color: var(--on-brand, #fff); font-size: 13px; font-weight: 700; display: grid; place-items: center; margin-top: 2px; }
 .ai-send .ai-prompt { width: 100%; font-size: 14px; border-radius: 10px; padding: 10px; border: 1px solid var(--line); background: var(--card-2, transparent); color: inherit; }
 .ai-send .grow { flex: 1; min-width: 0; }
+/* Photo & video keepsakes */
+.memory-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.memory-thumb { position: relative; }
+.memory-thumb img, .memory-thumb video { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; display: block; }
+.memory-thumb .icon-btn { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,.55); color: #fff; }
+.memory-media { display: flex; flex-direction: column; gap: 8px; }
+.memory-media img, .memory-media video { width: 100%; max-height: 420px; object-fit: cover; border-radius: 12px; display: block; }
+.keepsake-text.memory-story { font-style: normal; font-family: inherit; font-size: 16px; line-height: 1.55; }
